@@ -1,10 +1,8 @@
 import setuptools
 
-import seaexp
-
 NAME = "seaexp"
 
-VERSION = "0.21.1a"
+VERSION = "0.2101.0"
 
 AUTHOR = 'João Pedro Pedroso, João Pedro Dionísio and Davi Pereira-Santos'
 
@@ -26,11 +24,11 @@ CLASSIFIERS = ['Intended Audience :: Science/Research',
                'Natural Language :: English',
                'Programming Language :: Python',
                'Topic :: Scientific/Engineering',
-#posix               'Operating System :: Linux',
+               # posix               'Operating System :: Linux',
                'Programming Language :: Python :: 3.8']
 
 INSTALL_REQUIRES = [
-    'numpy', 'sklearn', 'imblearn', 'pytest'
+    'numpy', 'sklearn', 'lange'
 ]
 
 EXTRAS_REQUIRE = {
@@ -54,6 +52,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     setup_requires=SETUP_REQUIRES,
     url=URL,
+    # scripts=['seaexp']
 )
 
 package_dir = {'': 'seaexp'}  # For IDEs like Intellij to recognize the package.
