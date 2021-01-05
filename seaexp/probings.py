@@ -92,7 +92,7 @@ class Probings:
         return iter(self.points)
 
     def __str__(self):
-        return str(np.round(self.np * 1000) / 1000)
+        return str(self.np)
 
     @cached_property
     def xy_z(self):
