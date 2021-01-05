@@ -34,7 +34,7 @@ class Probings:
         return Probings(newpoints)
 
     @classmethod
-    def fromgrid(cls, f, side=4, seed=0, simulated=False):
+    def fromgrid(cls, f, side=4, simulated=False):
         """A new Probings object containing 'side'x'side' 2D points with z values given by function 'f'.
 
         Leave a margin of '1 / (2 * side)' around extreme points.
@@ -48,7 +48,6 @@ class Probings:
              [0.109375 0.328125 0.546875 0.765625]]
         """
         true_value = not simulated
-        rnd.seed(seed)
         points = {}
         margin = 1 / (2 * side)
         for x in -[margin, 3 * margin, ..., 1]:
@@ -93,4 +92,8 @@ class Probings:
         return iter(self.points)
 
     def __str__(self):
-        return str(self.np)
+        return str(np.round(self.np * 1000) / 1000)
+
+    @cached_property
+    def xy_z(self):
+        return [np.array(pair) for pair in self.points.keys()], [tup[1] for tup in self.points.values()]
