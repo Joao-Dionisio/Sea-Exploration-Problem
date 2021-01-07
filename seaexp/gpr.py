@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from functools import cached_property
+
 import numpy as np
 
 from sklearn.gaussian_process.kernels import WhiteKernel, RationalQuadratic, RBF, Matern, ExpSineSquared
@@ -6,14 +9,12 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from seaexp.abs.mixin.withPairCheck import withPairCheck
 
 
-class Estimator(withPairCheck):
+class GPR:
     """
     Composable Gaussian Process Regressor
 
     Parameters
     ----------
-    known_points
-        for training
     kernel_alias
         available abbreviations: quad, rbf, matern, expsine, white
     params
@@ -21,8 +22,8 @@ class Estimator(withPairCheck):
         available abbreviations: lsb, ab, nlb, restarts
     """
 
-    def __init__(self, known_points, kernel_alias, **params):
-        self.known_points, self.kernel_alias, self.params = known_points, kernel_alias, params
+    def __init__(self, kernel_alias, **params):
+        self.kernel_alias, self.params = kernel_alias, params
 
         if "lsb" in self.params:
             self.params["length_scale_bounds"] = self.params.pop("lsb")
@@ -44,26 +45,27 @@ class Estimator(withPairCheck):
             self.kernel = WhiteKernel(**self.params)
         else:
             raise Exception("Unknown kernel:", self.kernel_alias)
+        self.gpr_func = lambda: GaussianProcessRegressor(
+            kernel=self.kernel, n_restarts_optimizer=self.restarts, copy_X_train=True
+        )
 
-        self.gpr = GaussianProcessRegressor(kernel=self.kernel, n_restarts_optimizer=self.restarts, copy_X_train=True)
-        self.gpr.fit(*known_points.xy_z)
-        # self.gpr.fit(np.array(*known_points.xy_z))
+    @property
+    def gpr(self):
+        """A new GaussianProcessRegressor object already configured."""
+        return self.gpr_func()
 
-    def __add__(self, gpr, restarts=None):
-        """Compose the kernels of two estimators to create a new one."""
-        if restarts:
-            self.params["restarts"] = restarts
-        elif self.restarts != gpr.restarts:
-            raise Exception(f"Number of restarts should be provided explicitly when both estimators disagree:\n"
-                            f"{self.restarts} != {gpr.restarts}.")
+    def model(self, probings):
+        """Return the induced model according to the provided probings."""
+        gpr = self.gpr
+        gpr.fit(*probings.xy_z)
+        return GPRModel(gpr)
 
-        estimator = Estimator(self.kernel_alias, **self.params)
-        estimator.kernel += gpr.kernel
-        return estimator
 
+@dataclass
+class GPRModel(withPairCheck):
     def __call__(self, x_tup, y=None):
         """
-        Estimated value at the given point.
+        Estimated value at the given point, list or Probings obj.
         Parameters
         ----------
         x_tup

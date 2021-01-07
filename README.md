@@ -1,3 +1,6 @@
+![test](https://github.com/Joao-Dionisio/Sea-Exploration-Problem/workflows/test/badge.svg)
+[![codecov](https://codecov.io/gh/Joao-Dionisio/Sea-Exploration-Problem/branch/main/graph/badge.svg)](https://codecov.io/gh/Joao-Dionisio/Sea-Exploration-Problem)
+
 # surface
 Optimization and machine learning for sea bed exploration
 

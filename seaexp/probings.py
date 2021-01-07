@@ -1,6 +1,6 @@
 from functools import cached_property
 
-import lange
+from lange import ap
 import numpy as np
 import random as rnd
 from dataclasses import dataclass
@@ -50,8 +50,8 @@ class Probings:
         true_value = not simulated
         points = {}
         margin = 1 / (2 * side)
-        for x in -[margin, 3 * margin, ..., 1]:
-            for y in -[margin, 3 * margin, ..., 1]:
+        for x in ap[margin, 3 * margin, ..., 1]:
+            for y in ap[margin, 3 * margin, ..., 1]:
                 points[x, y] = f(x, y), true_value
         return Probings(points)
 

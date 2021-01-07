@@ -29,7 +29,9 @@ print(initially_known)
 
 # Select the point of maximum variance.
 estimator = Estimator(initially_known, "rbf", lsb=(0.08, 100))
-simulated_probings = Probings.fromgrid(estimator, 20, simulated=True)
+simulated_probings = Probings.fromgrid(estimator, 4, simulated=True)  # apenas para teste, usamos 100 no código anterior
 
 print(simulated_probings)
 
+from sklearn.model_selection import cross_val_score
+# err = -1 * cross_val_score(gpr, xys, zs, scoring='neg_mean_absolute_error', cv=5).mean()
