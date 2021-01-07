@@ -34,16 +34,15 @@ simulated_probings = Probings.fromgrid(estimator, 4, simulated=True)  # apenas p
 print(simulated_probings)
 
 from sklearn.model_selection import cross_val_score
+
 # err = -1 * cross_val_score(gpr, xys, zs, scoring='neg_mean_absolute_error', cv=5).mean()
-
-
-
-
-
 
 
 print("\n\n====================")
 print("experimentando hyperopt...")
+np.random.seed(0)
+
+
 # define an objective function
 def objective(args):
     case, val = args
@@ -52,19 +51,19 @@ def objective(args):
     else:
         return val ** 2
 
+
 # define a search space
 from hyperopt import hp
-space = hp.choice('a',
-                  [
-                      ('case 1', 1 + hp.lognormal('c1', 0, 1)),
-                      ('case 2', hp.uniform('c2', -10, 10))
-                  ])
+
+space = hp.choice('a', [
+    ('case 1', 1 + hp.loguniform('c1', 0, 1)),
+    ('case 2', hp.uniform('c2', -10, 10))
+])
 
 # minimize the objective over the space
 from hyperopt import fmin, tpe, space_eval
-best = fmin(objective, space, algo=tpe.suggest, max_evals=100)
+
+best = fmin(objective, space, algo=tpe.suggest, max_evals=100, rstate=np.random)
 
 print(best)
-# -> {'a': 1, 'c2': 0.01420615366247227}
 print(space_eval(space, best))
-# -> ('case 2', 0.01420615366247227}
