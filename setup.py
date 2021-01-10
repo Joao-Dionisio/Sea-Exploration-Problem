@@ -28,7 +28,7 @@ CLASSIFIERS = ['Intended Audience :: Science/Research',
                'Programming Language :: Python :: 3.8']
 
 INSTALL_REQUIRES = [
-    'numpy', 'sklearn', 'lange', 'hyperopt'
+    'numpy', 'sklearn', 'lange', 'hyperopt', 'scipy'
 ]
 
 EXTRAS_REQUIRE = {

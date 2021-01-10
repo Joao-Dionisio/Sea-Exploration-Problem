@@ -6,10 +6,17 @@ Proceed until no improvement is made. This results in the surface maximum varian
 
 Proceed adding points to the trip until the budget (T on paper) is exhausted.
 """
+import numpy as np
+from hyperopt import fmin, tpe, space_eval, hp
+from sklearn.exceptions import ConvergenceWarning
+from sklearn.utils._testing import ignore_warnings
+
 from seaexp.estimator import Estimator
 from seaexp.probings import Probings
 from seaexp.seabed import Seabed
-import numpy as np
+
+# Set random number generator.
+rnd = np.random.RandomState(seed=0)  # rnd = np.random.default_rng(seed)
 
 # Create initial known points.
 seabed1 = (Seabed.fromgaussian(0.1, 100, 0.35113, 0.070836)
@@ -24,46 +31,43 @@ seabed2 = (Seabed.fromgaussian(0.49985, 5.3545, 0.19934, 0.50696)
            + Seabed.fromgaussian(0.40523, 0.28157, 0.029318, 32.567))
 initially_known = Probings.fromgrid(seabed1, 4)
 
+# Tweak for printing numpy arrays.
 np.set_printoptions(suppress=True, linewidth=3000)
 print(initially_known)
 
-# Select the point of maximum variance.
-estimator = Estimator(initially_known, "rbf", lsb=(0.08, 100))
-simulated_probings = Probings.fromgrid(estimator, 4, simulated=True)  # apenas para teste, usamos 100 no código anterior
-
-print(simulated_probings)
-
-from sklearn.model_selection import cross_val_score
-
-# err = -1 * cross_val_score(gpr, xys, zs, scoring='neg_mean_absolute_error', cv=5).mean()
-
-
-print("\n\n====================")
-print("experimentando hyperopt...")
-np.random.seed(0)
-
-
-# define an objective function
-def objective(args):
-    case, val = args
-    if case == 'case 1':
-        return val
-    else:
-        return val ** 2
-
-
-# define a search space
-from hyperopt import hp
-
-space = hp.choice('a', [
-    ('case 1', 1 + hp.loguniform('c1', 0, 1)),
-    ('case 2', hp.uniform('c2', -10, 10))
+# Setup kernel optimization.
+bounds = [(0.00001, 0.001), (0.001, 0.1), (0.1, 10), (10, 1000), (1000, 100000)]
+space = hp.choice('kernel', [
+    {
+        "kernel_alias": 'quad',
+        "lsb": hp.choice("lsb_qua", bounds),
+        "ab": hp.choice("ab", bounds),
+    },
+    {
+        "kernel_alias": 'rbf',
+        "lsb": hp.choice("lsb_rbf", bounds),
+    },
+    {
+        "kernel_alias": 'matern',
+        "lsb": hp.choice("lsb_mat", bounds),
+        "nu": hp.uniform("nu", 0.5, 2.5)
+    }
+    # ('expsine', hp.loguniform("lsb_l", 0.00001, 1000), hp.loguniform("lsb_l", 0.001, 100000)),
+    # ('white', hp.loguniform("lsb_l", 0.00001, 1000), hp.loguniform("lsb_l", 0.001, 100000))
 ])
 
-# minimize the objective over the space
-from hyperopt import fmin, tpe, space_eval
 
-best = fmin(objective, space, algo=tpe.suggest, max_evals=100, rstate=np.random)
+@ignore_warnings(category=ConvergenceWarning)
+def objective(kwargs):
+    estimator = Estimator(initially_known, **kwargs)
+    estimated_seabed = Seabed(estimator)
+    error = Probings.fromgrid(seabed1 - estimated_seabed, 10).abs.sum
+    return error
 
-print(best)
+
+# Select the point of minimum error.
+best = fmin(objective, space, algo=tpe.suggest, max_evals=100, rstate=rnd)
+
 print(space_eval(space, best))
+
+# err = -1 * cross_val_score(gpr, xys, zs, scoring='neg_mean_absolute_error', cv=5).mean()

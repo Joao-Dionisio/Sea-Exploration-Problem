@@ -78,4 +78,4 @@ class Estimator(withPairCheck):
             x_tup = [self._check_pair(x_tup, y)]
         elif y:
             raise Exception(f"Cannot provide both x_tup as list and y={y}.")
-        return self.gpr.predict(x_tup)
+        return float(self.gpr.predict(x_tup))
