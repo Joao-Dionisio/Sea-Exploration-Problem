@@ -1,9 +1,11 @@
 import math
 import numpy as np
 from dataclasses import dataclass
-from typing import Union
+from typing import Union, TYPE_CHECKING
 
 from seaexp.abs.mixin.withPairCheck import withPairCheck
+
+# if TYPE_CHECKING:
 from seaexp.estimator import Estimator
 from seaexp.probings import Probings
 
@@ -38,10 +40,14 @@ class Seabed(withPairCheck):
 
     def __add__(self, other):
         """Create a new seabed by adding another."""
-        return Seabed(self.functions + other.functions)
+
+        print(type(other))
+        functions_from_other = [other] if isinstance(other, Estimator) else other.functions
+
+        return Seabed(self.functions + functions_from_other)
 
     @classmethod
-    def fromgaussian(cls, sigma, ampl, xcenter_tup, ycenter=None):
+    def fromgaussian(cls, sigma=1, ampl=1, xcenter_tup=(0, 0), ycenter=None):
         """
         Callable Gaussian function.
 
@@ -64,16 +70,14 @@ class Seabed(withPairCheck):
         )
 
     def __sub__(self, other):
-        """Subtract one Seabed object from another
-
-        The points don't need to match.
+        """Compose this Seabed object with a callable object (function, Seabed, Estimator, ...)
 
         Usage:
             >>> np.set_printoptions(precision=10, suppress=True)
-            >>> real_f = Seabed(lambda a, b: a * b)
-            >>> training_set = Probings.fromgrid(real_f, side=5)
-            >>> estimated_f = Seabed(Estimator(training_set, "rbf"))
-            >>> diff = Probings.fromgrid(real_f - estimated_f, side=5)
+            >>> real_seabed = Seabed(lambda a, b: a * b)
+            >>> training_set = Probings.fromgrid(side=5, f=real_seabed)
+            >>> estimated_seabed = Seabed(Estimator(training_set, "rbf"))
+            >>> diff = Probings.fromgrid(side=5, f=real_seabed - estimated_seabed)
             >>> print(diff)
             [[ 0.0000017569 -0.0000034972 -0.0000003108  0.00000417   -0.0000021208]
              [-0.0000034972  0.0000076777 -0.0000004205 -0.0000075265  0.000003735 ]
@@ -84,6 +88,8 @@ class Seabed(withPairCheck):
             >>> error
             7.551744725834558e-05
             """
+        if isinstance(other, Estimator):
+            other = Seabed(other)
         return self + -other
 
     def __neg__(self):

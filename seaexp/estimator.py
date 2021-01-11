@@ -1,9 +1,19 @@
-import numpy as np
+import json
+from copy import copy
+from typing import TYPE_CHECKING
 
-from sklearn.gaussian_process.kernels import WhiteKernel, RationalQuadratic, RBF, Matern, ExpSineSquared
+import numpy as np
+from hyperopt import fmin, tpe, space_eval, hp
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import WhiteKernel, RationalQuadratic, RBF, Matern, ExpSineSquared
+from sklearn.utils._testing import ignore_warnings
 
 from seaexp.abs.mixin.withPairCheck import withPairCheck
+
+if TYPE_CHECKING:
+    from seaexp.probings import Probings
+    from seaexp.seabed import Seabed
 
 
 class Estimator(withPairCheck):
@@ -21,9 +31,12 @@ class Estimator(withPairCheck):
         available abbreviations: lsb, ab, nlb, restarts
     """
 
-    def __init__(self, known_points, kernel_alias, seed=0, **params):
-        self.known_points, self.kernel_alias, self.params = known_points, kernel_alias, params
+    def __init__(self, known_points, kernel_alias, seed=0, signal=1, **params):
+        self.known_points = known_points
+        self.kernel_alias = kernel_alias
         self.seed = seed
+        self.signal = signal
+        self.params = params
 
         if "lsb" in self.params:
             self.params["length_scale_bounds"] = self.params.pop("lsb")
@@ -81,4 +94,75 @@ class Estimator(withPairCheck):
             x_tup = [self._check_pair(x_tup, y)]
         elif y:
             raise Exception(f"Cannot provide both x_tup as list and y={y}.")
-        return float(self.gpr.predict(x_tup))
+        return self.signal * float(self.gpr.predict(x_tup))
+
+    @classmethod
+    def fromoptimization(cls,
+                         known_points: 'Probings', testing_points: 'Probings', seed=0,
+                         param_space=None, algo=tpe.suggest, max_evals=10, verbose=False):
+        """
+        Usage:
+            >>> from seaexp.probings import Probings
+            >>> from seaexp.seabed import Seabed
+            >>> points = {
+            ...     (0.0, 0.1): 0.12,
+            ...     (0.2, 0.3): 0.39
+            ... }
+            >>> known_points = Probings(points, Seabed.fromgaussian())
+            >>> estimator = Estimator.fromoptimization(known_points, testing_points)
+            >>> estimator
+
+        Parameters
+        ----------
+        known_points
+        testing_points
+        seed
+        param_space
+        max_evals
+        algo
+        verbose
+
+        Returns
+        -------
+
+        """
+        from seaexp.probings import Probings
+
+        @ignore_warnings(category=ConvergenceWarning)
+        def objective(kwargs):
+            estimator = Estimator(known_points, seed=seed, **kwargs)
+            errors = testing_points - testing_points @ estimator
+            error = errors.abs.sum
+            if verbose:
+                k = kwargs.pop("kernel_alias")
+                print(f"{round(error, 1)} \t{k} \t{json.dumps(kwargs, sort_keys=True)}")
+            return error
+
+        if param_space is None:
+            bounds = [(0.00001, 0.001), (0.001, 0.1), (0.1, 10), (10, 1000), (1000, 100000)]
+            param_space = hp.choice('kernel', [
+                {"kernel_alias": 'quad', "lsb": hp.choice("lsb_qua", bounds), "ab": hp.choice("ab", bounds)},
+                {"kernel_alias": 'rbf', "lsb": hp.choice("lsb_rbf", bounds), },
+                {"kernel_alias": 'matern', "lsb": hp.choice("lsb_mat", bounds), "nu": hp.uniform("nu", 0.5, 2.5)}
+                # ('expsine', hp.loguniform("lsb_l", 0.00001, 1000), hp.loguniform("lsb_l", 0.001, 100000)),
+                # ('white', hp.loguniform("lsb_l", 0.00001, 1000), hp.loguniform("lsb_l", 0.001, 100000))
+            ])
+
+        # Set random number generator.
+        rnd = np.random.RandomState(seed=0)  # rnd = np.random.default_rng(seed)
+
+        # Select minimum error config.
+        best = fmin(objective, param_space, algo=algo, max_evals=max_evals, rstate=rnd)
+        cfg = space_eval(param_space, best)
+
+        return Estimator(known_points, seed=seed, **cfg)
+
+    def __neg__(self):
+        newestimator = copy(self)
+        newestimator.signal = -1
+        return newestimator
+
+    def __str__(self):
+        return f"Estimator(\n\t" \
+               f"points: {self.known_points.n}, kernel: {self.kernel_alias}, seed: {self.seed}, signal: {self.signal}" \
+               f"\n\tparams: {self.params}\n)"

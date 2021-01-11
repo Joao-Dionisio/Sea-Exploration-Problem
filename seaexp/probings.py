@@ -1,13 +1,15 @@
+from dataclasses import dataclass
 from functools import cached_property
 
-from lange import ap
 import numpy as np
-import random as rnd
-from dataclasses import dataclass
-
+from lange import ap
 from scipy.sparse import csr_matrix
 
-from seaexp.estimator import Estimator
+
+# from typing import TYPE_CHECKING
+
+
+# if TYPE_CHECKING:
 
 
 @dataclass
@@ -61,14 +63,14 @@ class Probings:
         return Probings(newpoints)
 
     @classmethod
-    def fromgrid(cls, f, side=4):  # , simulated=None):
+    def fromgrid(cls, side=4, f=lambda *_: 0):  # , simulated=None):
         """A new Probings object containing 'side'x'side' 2D points with z values given by function 'f'.
 
         Leave a margin of '1 / (2 * side)' around extreme points.
 
         Usage::
             >>> np.set_printoptions(precision=5)
-            >>> probings = Probings.fromgrid(lambda x, y: x * y)
+            >>> probings = Probings.fromgrid(f=lambda x, y: x * y)
             >>> print(probings)
             [[0.01562 0.04688 0.07812 0.10938]
              [0.04688 0.14062 0.23438 0.32812]
@@ -86,7 +88,7 @@ class Probings:
         return Probings(points)
 
     @classmethod
-    def fromrandom(cls, f, size=16, rnd=np.random.default_rng(0)):  # simulated=None,
+    def fromrandom(cls, size=16, f=lambda *_: 0, rnd=np.random.default_rng(0)):  # simulated=None,
         """A new Probings object containing 'size' 2D points with z values given by function 'f'."""
         # if simulated is not None:
         #     raise NotImplementedError("'simulated' flag still not ready.")
@@ -118,11 +120,20 @@ class Probings:
             self._np = arr
         return self._np
 
-    def items(self):
-        return self.points.items()
+    # def items(self):
+    #     return self.points.items()
 
-    def values(self):
-        return self.points.values()
+    @cached_property
+    def xy(self):
+        return list(self.points.keys())
+
+    @cached_property
+    def z(self):
+        return list(self.points.values())
+
+    @cached_property
+    def xy_z(self):
+        return [np.array(pair) for pair in self.xy], self.z
 
     def __iter__(self):
         return iter(self.points)
@@ -130,21 +141,18 @@ class Probings:
     def __str__(self):
         return str(self.np)
 
-    @cached_property
-    def xy_z(self):
-        return [np.array(pair) for pair in self.points.keys()], list(self.points.values())
-
     def __sub__(self, other):
         """Subtract one Probings object from another
 
         The points need to match. Otherwise, see Seabed.__sub__.
 
         Usage:
+            >>> from seaexp.estimator import Estimator
             >>> np.set_printoptions(precision=10, suppress=True)
             >>> true_value = lambda a, b: a * b
-            >>> real = Probings.fromgrid(true_value, side=5)
+            >>> real = Probings.fromgrid(side=5, f=true_value)
             >>> estimator = Estimator(real, "rbf")
-            >>> estimated = Probings.fromgrid(estimator, side=5)
+            >>> estimated = Probings.fromgrid(side=5, f=estimator)
             >>> print(real - estimated)
             [[ 0.0000017569 -0.0000034972 -0.0000003108  0.00000417   -0.0000021208]
              [-0.0000034972  0.0000076777 -0.0000004205 -0.0000075265  0.000003735 ]
@@ -159,7 +167,7 @@ class Probings:
     def __abs__(self):
         """
         Usage:
-            >>> probings = Probings.fromgrid(lambda x, y: -x * y)
+            >>> probings = Probings.fromgrid(f=lambda x, y: -x * y)
             >>> print(probings)
             [[-0.015625 -0.046875 -0.078125 -0.109375]
              [-0.046875 -0.140625 -0.234375 -0.328125]
@@ -205,7 +213,7 @@ class Probings:
 
     @cached_property
     def sum(self):
-        return sum(self.values())
+        return sum(self.z)
 
     @cached_property
     def abs(self):
@@ -213,3 +221,30 @@ class Probings:
 
     def __getitem__(self, item):
         return self.points[item]
+
+    def __call__(self, x, y):
+        return self[(x, y)]
+
+    def __matmul__(self, f):
+        """Replace z values according to the given function
+
+        Usage:
+            >>> zeroed = Probings.fromgrid(side=5)
+            >>> print(zeroed)
+            [[0. 0. 0. 0. 0.]
+             [0. 0. 0. 0. 0.]
+             [0. 0. 0. 0. 0.]
+             [0. 0. 0. 0. 0.]
+             [0. 0. 0. 0. 0.]]
+            >>> print(zeroed @ (lambda x, y: x * y))
+            [[0.01 0.03 0.05 0.07 0.09]
+             [0.03 0.09 0.15 0.21 0.27]
+             [0.05 0.15 0.25 0.35 0.45]
+             [0.07 0.21 0.35 0.49 0.63]
+             [0.09 0.27 0.45 0.63 0.81]]
+        """
+        return Probings({(x, y): f(x, y) for x, y in self.points})
+
+    @property
+    def n(self):
+        return len(self.points)
