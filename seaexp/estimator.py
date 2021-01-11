@@ -1,3 +1,4 @@
+import math
 from copy import copy
 from typing import TYPE_CHECKING
 
@@ -147,6 +148,7 @@ class Estimator(withPairCheck):
 
         """
         from seaexp.probings import Probings
+        minerror = [math.inf]
 
         @ignore_warnings(category=ConvergenceWarning)
         def objective(kwargs):
@@ -156,6 +158,8 @@ class Estimator(withPairCheck):
             if verbose:
                 k = kwargs.pop("kernel_alias")
                 print(f"{round(error, 1)} \t{k} \t{json.dumps(kwargs, sort_keys=True)}")
+            if error < minerror[0]:
+                minerror[0] = error
             return error
 
         if param_space is None:
@@ -174,6 +178,8 @@ class Estimator(withPairCheck):
         # Select minimum error config.
         best = fmin(objective, param_space, algo=algo, max_evals=max_evals, rstate=rnd, show_progressbar=verbose)
         cfg = space_eval(param_space, best)
+        if verbose:
+            print("Lowest error:", minerror[0])
 
         return Estimator(known_points, seed=seed, **cfg)
 
