@@ -1,4 +1,3 @@
-import json
 from copy import copy
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,22 @@ from seaexp.abs.mixin.withPairCheck import withPairCheck
 if TYPE_CHECKING:
     from seaexp.probings import Probings
     from seaexp.seabed import Seabed
+
+import json
+
+
+def rf(o, ndigits=2):
+    """Round floats inside collections
+
+    https://stackoverflow.com/a/53798633/9681577
+    """
+    if isinstance(o, float):
+        return round(o, ndigits)
+    if isinstance(o, dict):
+        return {k: rf(v, ndigits) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [rf(x, ndigits) for x in o]
+    return o
 
 
 class Estimator(withPairCheck):
@@ -108,9 +123,14 @@ class Estimator(withPairCheck):
             ...     (0.0, 0.1): 0.12,
             ...     (0.2, 0.3): 0.39
             ... }
-            >>> known_points = Probings(points, Seabed.fromgaussian())
+            >>> known_points = Probings(points)
+            >>> testing_points = Probings.fromrandom(f=Seabed.fromgaussian())
             >>> estimator = Estimator.fromoptimization(known_points, testing_points)
-            >>> estimator
+            >>> print(estimator)  # doctest: +NORMALIZE_WHITESPACE
+            Estimator(
+                points: 2, kernel: matern, seed: 0, signal: 1
+                params: {'nu': 1.353602, 'length_scale_bounds': [0.1, 10]}
+            )
 
         Parameters
         ----------
@@ -152,7 +172,7 @@ class Estimator(withPairCheck):
         rnd = np.random.RandomState(seed=0)  # rnd = np.random.default_rng(seed)
 
         # Select minimum error config.
-        best = fmin(objective, param_space, algo=algo, max_evals=max_evals, rstate=rnd)
+        best = fmin(objective, param_space, algo=algo, max_evals=max_evals, rstate=rnd, show_progressbar=verbose)
         cfg = space_eval(param_space, best)
 
         return Estimator(known_points, seed=seed, **cfg)
@@ -165,4 +185,4 @@ class Estimator(withPairCheck):
     def __str__(self):
         return f"Estimator(\n\t" \
                f"points: {self.known_points.n}, kernel: {self.kernel_alias}, seed: {self.seed}, signal: {self.signal}" \
-               f"\n\tparams: {self.params}\n)"
+               f"\n\tparams: {rf(self.params, 6)}\n)"

@@ -40,8 +40,6 @@ class Seabed(withPairCheck):
 
     def __add__(self, other):
         """Create a new seabed by adding another."""
-
-        print(type(other))
         functions_from_other = [other] if isinstance(other, Estimator) else other.functions
 
         return Seabed(self.functions + functions_from_other)
