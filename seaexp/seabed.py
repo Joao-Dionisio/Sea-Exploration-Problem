@@ -71,17 +71,16 @@ class Seabed(withPairCheck):
         """Compose this Seabed object with a callable object (function, Seabed, Estimator, ...)
 
         Usage:
-            >>> np.set_printoptions(precision=10, suppress=True)
             >>> real_seabed = Seabed(lambda a, b: a * b)
             >>> training_set = Probings.fromgrid(side=5, f=real_seabed)
             >>> estimated_seabed = Seabed(Estimator(training_set, "rbf"))
             >>> diff = Probings.fromgrid(side=5, f=real_seabed - estimated_seabed)
-            >>> print(diff)
-            [[ 0.0000017569 -0.0000034972 -0.0000003108  0.00000417   -0.0000021208]
-             [-0.0000034972  0.0000076777 -0.0000004205 -0.0000075265  0.000003735 ]
-             [-0.0000003108 -0.0000004206 -0.0000002403  0.0000004872  0.0000005891]
-             [ 0.00000417   -0.0000075264  0.0000004872  0.0000076428 -0.0000048833]
-             [-0.0000021208  0.000003735   0.0000005891 -0.0000048834  0.0000027188]]
+            >>> diff.show()
+            [[ 0.00000176 -0.0000035  -0.00000031  0.00000417 -0.00000212]
+             [-0.0000035   0.00000768 -0.00000042 -0.00000753  0.00000373]
+             [-0.00000031 -0.00000042 -0.00000024  0.00000049  0.00000059]
+             [ 0.00000417 -0.00000753  0.00000049  0.00000764 -0.00000488]
+             [-0.00000212  0.00000373  0.00000059 -0.00000488  0.00000272]]
             >>> error = diff.abs.sum
             >>> error
             7.551744725834558e-05

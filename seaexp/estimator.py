@@ -47,6 +47,7 @@ class Estimator(withPairCheck):
         available abbreviations: lsb, ab, nlb, restarts
     """
 
+    @ignore_warnings(category=ConvergenceWarning)
     def __init__(self, known_points, kernel_alias, seed=0, signal=1, **params):
         self.known_points = known_points
         self.kernel_alias = kernel_alias
@@ -79,7 +80,6 @@ class Estimator(withPairCheck):
             kernel=self.kernel, n_restarts_optimizer=self.restarts, copy_X_train=True, random_state=self.seed
         )
         self.gpr.fit(*known_points.xy_z)
-        # self.gpr.fit(np.array(*known_points.xy_z))
 
     def __add__(self, gpr, restarts=None):
         """Compose the kernels of two estimators to create a new one."""
@@ -113,10 +113,11 @@ class Estimator(withPairCheck):
         return self.signal * float(self.gpr.predict(x_tup))
 
     @classmethod
-    def fromoptimization(cls,
-                         known_points: 'Probings', testing_points: 'Probings', seed=0,
-                         param_space=None, algo=tpe.suggest, max_evals=10, verbose=False):
+    def fromoptimizer(cls, known_points: 'Probings', testing_points: 'Probings', seed=0,
+                      param_space=None, algo=None, max_evals=10, verbose=False):
         """
+        Hyperopt error minimizer for kernel search
+
         Usage:
             >>> from seaexp.probings import Probings
             >>> from seaexp.seabed import Seabed
@@ -126,7 +127,7 @@ class Estimator(withPairCheck):
             ... }
             >>> known_points = Probings(points)
             >>> testing_points = Probings.fromrandom(f=Seabed.fromgaussian())
-            >>> estimator = Estimator.fromoptimization(known_points, testing_points)
+            >>> estimator = Estimator.fromoptimizer(known_points, testing_points)
             >>> print(estimator)  # doctest: +NORMALIZE_WHITESPACE
             Estimator(
                 points: 2, kernel: matern, seed: 0, signal: 1
@@ -141,6 +142,7 @@ class Estimator(withPairCheck):
         param_space
         max_evals
         algo
+            default = tpe.suggest
         verbose
 
         Returns
@@ -148,6 +150,8 @@ class Estimator(withPairCheck):
 
         """
         from seaexp.probings import Probings
+        if algo is None:
+            algo = tpe.suggest
         minerror = [math.inf]
 
         @ignore_warnings(category=ConvergenceWarning)

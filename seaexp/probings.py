@@ -1,7 +1,10 @@
+import operator
 from dataclasses import dataclass
 from functools import cached_property
+from functools import reduce
+from random import shuffle
 
-import numpy as np
+import numpy
 from lange import ap
 from scipy.sparse import csr_matrix
 
@@ -22,29 +25,13 @@ class Probings:
         ...     (0.2, 0.3): 0.39
         ... }
         >>> probings = Probings(known_points)
-        >>> probings <<= 4, 1, 0.34  # Add point.
-        >>> print(probings)
-        [[0.12 0.   0.   0.   0.  ]
-         [0.   0.39 0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.  ]
-         [0.   0.   0.   0.   0.34]]
+        >>> probings <<= 0.9, 1, 0.34  # Add point.
+        >>> print(probings)  # NaN means 'unknown z value at that point'.
+        [[0.12  nan  nan  nan  nan]
+         [ nan 0.39  nan  nan  nan]
+         [ nan  nan  nan  nan  nan]
+         [ nan  nan  nan  nan  nan]
+         [ nan  nan  nan  nan 0.34]]
     """
     points: dict
     _np = None
@@ -69,13 +56,12 @@ class Probings:
         Leave a margin of '1 / (2 * side)' around extreme points.
 
         Usage::
-            >>> np.set_printoptions(precision=5)
             >>> probings = Probings.fromgrid(f=lambda x, y: x * y)
-            >>> print(probings)
-            [[0.01562 0.04688 0.07812 0.10938]
-             [0.04688 0.14062 0.23438 0.32812]
-             [0.07812 0.23438 0.39062 0.54688]
-             [0.10938 0.32812 0.54688 0.76562]]
+            >>> probings.show()
+            [[0.015625 0.046875 0.078125 0.109375]
+             [0.046875 0.140625 0.234375 0.328125]
+             [0.078125 0.234375 0.390625 0.546875]
+             [0.109375 0.328125 0.546875 0.765625]]
         """
         # if simulated is not None:
         #     raise NotImplementedError("'simulated' flag still not ready.")
@@ -88,7 +74,7 @@ class Probings:
         return Probings(points)
 
     @classmethod
-    def fromrandom(cls, size=16, f=lambda *_: 0, rnd=np.random.default_rng(0)):  # simulated=None,
+    def fromrandom(cls, size=16, f=lambda *_: 0, rnd=numpy.random.default_rng(0)):  # simulated=None,
         """A new Probings object containing 'size' 2D points with z values given by function 'f'."""
         # if simulated is not None:
         #     raise NotImplementedError("'simulated' flag still not ready.")
@@ -102,7 +88,9 @@ class Probings:
 
     @property
     def np(self):
-        """Convert to a 2D numpy ndarray."""
+        """Convert to a spatially correct 2D numpy ndarray.
+
+        Unknown points will be filled with NaN."""
         if self._np is None:
             xys = self.points.keys()
             xs, ys = zip(*xys)
@@ -110,11 +98,12 @@ class Probings:
             minx, miny = min(setx), min(sety)
             maxx, maxy = max(setx), max(sety)
             ordw, ordh = sorted(list(setx)), sorted(list(sety))
-            difw = abs(np.array(ordw[1:] + ordw[0:1]) - np.array(ordw))
-            difh = abs(np.array(ordh[1:] + ordh[0:1]) - np.array(ordh))
+            difw = abs(numpy.array(ordw[1:] + ordw[0:1]) - numpy.array(ordw))
+            difh = abs(numpy.array(ordh[1:] + ordh[0:1]) - numpy.array(ordh))
             minw, minh = min(difw), min(difh)
             w, h = int((maxx - minx) / minw) + 1, int((maxy - miny) / minh) + 1
-            arr = np.zeros((w, h))
+            arr = numpy.empty((w, h))
+            arr.fill(numpy.nan)
             for (x, y), z in self.points.items():
                 arr[int((x - minx) / minw), int((y - miny) / minh)] = z
             self._np = arr
@@ -133,33 +122,32 @@ class Probings:
 
     @cached_property
     def xy_z(self):
-        return [np.array(pair) for pair in self.xy], self.z
+        return [numpy.array(pair) for pair in self.xy], self.z
 
     def __iter__(self):
-        return iter(self.points)
+        yield from self.points.items()
 
     def __str__(self):
         return str(self.np)
 
     def __sub__(self, other):
-        """Subtract one Probings object from another
+        """Element-wise subtraction of a Probings object from another
 
         The points need to match. Otherwise, see Seabed.__sub__.
 
         Usage:
             >>> from seaexp.estimator import Estimator
-            >>> np.set_printoptions(precision=10, suppress=True)
             >>> true_value = lambda a, b: a * b
             >>> real = Probings.fromgrid(side=5, f=true_value)
             >>> estimator = Estimator(real, "rbf")
             >>> estimated = Probings.fromgrid(side=5, f=estimator)
-            >>> print(real - estimated)
-            [[ 0.0000017569 -0.0000034972 -0.0000003108  0.00000417   -0.0000021208]
-             [-0.0000034972  0.0000076777 -0.0000004205 -0.0000075265  0.000003735 ]
-             [-0.0000003108 -0.0000004206 -0.0000002403  0.0000004872  0.0000005891]
-             [ 0.00000417   -0.0000075264  0.0000004872  0.0000076428 -0.0000048833]
-             [-0.0000021208  0.000003735   0.0000005891 -0.0000048834  0.0000027188]]
-         """
+            >>> (real - estimated).show()
+            [[ 0.00000176 -0.0000035  -0.00000031  0.00000417 -0.00000212]
+             [-0.0000035   0.00000768 -0.00000042 -0.00000753  0.00000373]
+             [-0.00000031 -0.00000042 -0.00000024  0.00000049  0.00000059]
+             [ 0.00000417 -0.00000753  0.00000049  0.00000764 -0.00000488]
+             [-0.00000212  0.00000373  0.00000059 -0.00000488  0.00000272]]
+        """
         newpoints = {k: self[k] - other[k] for k in self.points}
         return Probings(newpoints)
 
@@ -193,23 +181,27 @@ class Probings:
         # return newprobings
 
     @classmethod
-    def fromnp(cls, np):
+    def fromnp(cls, np: numpy.ndarray):
         """Create a Probings object from a 2D numpy array
 
         Usage:
-            >>> array = np.array([[0.4, 0.3, 0.3],[0, 0, 0.5],[0.2, 0.3, 0.8]])
+            >>> array = numpy.array([[0.4, 0.3, 0.3],[0, 0, 0.5],[0.2, 0.3, 0.8]])
             >>> array
             array([[0.4, 0.3, 0.3],
                    [0. , 0. , 0.5],
                    [0.2, 0.3, 0.8]])
             >>> fromnp = Probings.fromnp(array)
             >>> fromnp
-            Probings(points={(0, 0): 0.4, (2, 0): 0.2, (0, 1): 0.3, (2, 1): 0.3, (0, 2): 0.3, (1, 2): 0.5, (2, 2): 0.8})
+            Probings(points={(0, 0): 0.4, (1, 0): 0, (2, 0): 0.2, (0, 1): 0.3, (1, 1): 0, (2, 1): 0.3, (0, 2): 0.3, (1, 2): 0.5, (2, 2): 0.8})
             >>> (fromnp.np == array).all()
             True
 
         """
-        return Probings(dict(csr_matrix(np).todok()))
+        m = np.copy()
+        m[m == 0] = 8124567890123456  # Save zeros.
+        m = csr_matrix(m).todok()  # Convert to sparse.
+        points = {k: 0 if v == 8124567890123456 else v for k, v in dict(m).items()}  # Recover zeros.
+        return Probings(points)
 
     @cached_property
     def sum(self):
@@ -220,6 +212,8 @@ class Probings:
         return abs(self)
 
     def __getitem__(self, item):
+        if isinstance(item, slice):
+            return Probings(dict(list(self)[item]))
         return self.points[item]
 
     def __call__(self, x, y):
@@ -236,7 +230,7 @@ class Probings:
              [0. 0. 0. 0. 0.]
              [0. 0. 0. 0. 0.]
              [0. 0. 0. 0. 0.]]
-            >>> print(zeroed @ (lambda x, y: x * y))
+            >>> (zeroed @ (lambda x, y: x * y)).show()
             [[0.01 0.03 0.05 0.07 0.09]
              [0.03 0.09 0.15 0.21 0.27]
              [0.05 0.15 0.25 0.35 0.45]
@@ -248,3 +242,89 @@ class Probings:
     @property
     def n(self):
         return len(self.points)
+
+    def show(self):
+        """Print z values as a rounded float matrix"""
+        with numpy.printoptions(suppress=True, linewidth=1000, precision=8):
+            print(self)
+
+    def shuffled(self, rnd=numpy.random.default_rng(0)):
+        tuples = list(self.points.items())
+        shuffle(tuples, rnd.random)
+        return Probings(dict(tuples))
+
+    def __and__(self, other):
+        """Concatenation of two Probings
+
+        The right operand will override the left operand in case of key collision.
+        Usage:
+            >>> true_value = lambda a, b: a * b
+            >>> a = Probings.fromgrid(side=3, f=true_value)
+            >>> b = Probings.fromgrid(side=2, f=true_value)
+            >>> a.show()
+            [[0.02777778 0.08333333 0.13888889]
+             [0.08333333 0.25       0.41666667]
+             [0.13888889 0.41666667 0.69444444]]
+            >>> b.show()
+            [[0.0625 0.1875]
+             [0.1875 0.5625]]
+            >>> (a & b).show()  # Note that the output granularity is adjusted to the minimum possible.
+            [[0.02777778        nan        nan        nan 0.08333333        nan        nan        nan 0.13888889]
+             [       nan 0.0625            nan        nan        nan        nan        nan 0.1875            nan]
+             [       nan        nan        nan        nan        nan        nan        nan        nan        nan]
+             [       nan        nan        nan        nan        nan        nan        nan        nan        nan]
+             [0.08333333        nan        nan        nan 0.25              nan        nan        nan 0.41666667]
+             [       nan        nan        nan        nan        nan        nan        nan        nan        nan]
+             [       nan        nan        nan        nan        nan        nan        nan        nan        nan]
+             [       nan 0.1875            nan        nan        nan        nan        nan 0.5625            nan]
+             [0.13888889        nan        nan        nan 0.41666667        nan        nan        nan 0.69444444]]
+        """
+
+        return Probings(self.points | other.points)
+
+
+def cv(probings, k=5, rnd=numpy.random.default_rng(0)):
+    """
+    Usage:
+        >>> probings = Probings({(0, 0): 0, (1, 1): 0, (2, 2): 0, (3, 3): 0, (4, 4): 0, (5, 5): 0})
+        >>> probings.xy
+        [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)]
+        >>> for run, (training, test) in enumerate(cv(probings, k=3)):
+        ...     print(f"Run {run}:")
+        ...     print("training:", training.xy)
+        ...     print("test:", test.xy)
+        Run 0:
+        training: [(5, 5), (0, 0), (1, 1), (3, 3)]
+        test: [(2, 2), (4, 4)]
+        Run 1:
+        training: [(2, 2), (4, 4), (1, 1), (3, 3)]
+        test: [(5, 5), (0, 0)]
+        Run 2:
+        training: [(2, 2), (4, 4), (5, 5), (0, 0)]
+        test: [(1, 1), (3, 3)]
+
+    Parameters
+    ----------
+    probings
+    k
+    rnd
+
+    Returns
+    -------
+
+    """
+    min_fold_size, rem = divmod(probings.n, k)
+    shuffled = probings.shuffled(rnd)
+    folds = []
+    i = 0
+    while i < probings.n:
+        fold_size = min_fold_size
+        if i < rem:
+            fold_size += 1
+        folds.append(shuffled[i:i + fold_size])
+        i += fold_size
+
+    for i in range(k):
+        tr = reduce(operator.and_, folds[0:(i + k) % k] + folds[i + 1: k])
+        ts = folds[i]
+        yield tr, ts

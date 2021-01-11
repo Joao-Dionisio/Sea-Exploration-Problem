@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.gaussian_process import GaussianProcessRegressor as SkGPR
 from sklearn.gaussian_process.kernels import WhiteKernel, RationalQuadratic, RBF, Matern, ExpSineSquared
+from sklearn.utils._testing import ignore_warnings
 
 from seaexp.abs.mixin.withPairCheck import withPairCheck
 
@@ -14,7 +16,7 @@ class GPR:
     ----------
     kernel_alias
         available abbreviations: quad, rbf, matern, expsine, white
-        TODO:quad+rbf+... (Addition of RBF is not implemented yet. However, estimators can be added in the mean time.)
+        TODO:quad+rbf+... (Addition of GPR is not implemented yet. However, estimators can be added in the mean time.)
     params
         sklearn parameters for both kernel and GPR
         available abbreviations: lsb, ab, nlb, restarts
@@ -57,6 +59,7 @@ class GPR:
         """A new GaussianProcessRegressor object already configured."""
         return self.gpr_func()
 
+    @ignore_warnings(category=ConvergenceWarning)
     def model(self, probings):
         """Return the induced model according to the provided probings."""
         gpr = self.gpr
