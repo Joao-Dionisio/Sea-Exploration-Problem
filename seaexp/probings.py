@@ -67,12 +67,13 @@ class Probings:
         Leave a margin of '1 / (2 * side)' around extreme points.
 
         Usage::
+            >>> np.set_printoptions(precision=5)
             >>> probings = Probings.fromgrid(lambda x, y: x * y)
             >>> print(probings)
-            [[0.015625 0.046875 0.078125 0.109375]
-             [0.046875 0.140625 0.234375 0.328125]
-             [0.078125 0.234375 0.390625 0.546875]
-             [0.109375 0.328125 0.546875 0.765625]]
+            [[0.01562 0.04688 0.07812 0.10938]
+             [0.04688 0.14062 0.23438 0.32812]
+             [0.07812 0.23438 0.39062 0.54688]
+             [0.10938 0.32812 0.54688 0.76562]]
         """
         # if simulated is not None:
         #     raise NotImplementedError("'simulated' flag still not ready.")
@@ -139,22 +140,18 @@ class Probings:
         The points need to match. Otherwise, see Seabed.__sub__.
 
         Usage:
+            >>> np.set_printoptions(precision=10, suppress=True)
             >>> true_value = lambda a, b: a * b
             >>> real = Probings.fromgrid(true_value, side=5)
             >>> estimator = Estimator(real, "rbf")
             >>> estimated = Probings.fromgrid(estimator, side=5)
             >>> print(real - estimated)
-            [[ 1.75689071e-06 -3.49719514e-06 -3.10842734e-07  4.16997529e-06
-              -2.12081810e-06]
-             [-3.49718059e-06  7.67765581e-06 -4.20537253e-07 -7.52645341e-06
-               3.73498871e-06]
-             [-3.10824544e-07 -4.20566357e-07 -2.40339432e-07  4.87225043e-07
-               5.89093543e-07]
-             [ 4.16996802e-06 -7.52644613e-06  4.87228681e-07  7.64279524e-06
-              -4.88333273e-06]
-             [-2.12081810e-06  3.73497416e-06  5.89104457e-07 -4.88338730e-06
-               2.71880577e-06]]
-        """
+            [[ 0.0000017569 -0.0000034972 -0.0000003108  0.00000417   -0.0000021208]
+             [-0.0000034972  0.0000076777 -0.0000004205 -0.0000075265  0.000003735 ]
+             [-0.0000003108 -0.0000004206 -0.0000002403  0.0000004872  0.0000005891]
+             [ 0.00000417   -0.0000075264  0.0000004872  0.0000076428 -0.0000048833]
+             [-0.0000021208  0.000003735   0.0000005891 -0.0000048834  0.0000027188]]
+         """
         newpoints = {k: self[k] - other[k] for k in self.points}
         return Probings(newpoints)
 

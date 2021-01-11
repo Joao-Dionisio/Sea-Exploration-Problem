@@ -1,4 +1,5 @@
 import math
+import numpy as np
 from dataclasses import dataclass
 from typing import Union
 
@@ -68,21 +69,17 @@ class Seabed(withPairCheck):
         The points don't need to match.
 
         Usage:
+            >>> np.set_printoptions(precision=10, suppress=True)
             >>> real_f = Seabed(lambda a, b: a * b)
             >>> training_set = Probings.fromgrid(real_f, side=5)
             >>> estimated_f = Seabed(Estimator(training_set, "rbf"))
             >>> diff = Probings.fromgrid(real_f - estimated_f, side=5)
             >>> print(diff)
-            [[ 1.75689071e-06 -3.49719514e-06 -3.10842734e-07  4.16997529e-06
-              -2.12081810e-06]
-             [-3.49718059e-06  7.67765581e-06 -4.20537253e-07 -7.52645341e-06
-               3.73498871e-06]
-             [-3.10824544e-07 -4.20566357e-07 -2.40339432e-07  4.87225043e-07
-               5.89093543e-07]
-             [ 4.16996802e-06 -7.52644613e-06  4.87228681e-07  7.64279524e-06
-              -4.88333273e-06]
-             [-2.12081810e-06  3.73497416e-06  5.89104457e-07 -4.88338730e-06
-               2.71880577e-06]]
+            [[ 0.0000017569 -0.0000034972 -0.0000003108  0.00000417   -0.0000021208]
+             [-0.0000034972  0.0000076777 -0.0000004205 -0.0000075265  0.000003735 ]
+             [-0.0000003108 -0.0000004206 -0.0000002403  0.0000004872  0.0000005891]
+             [ 0.00000417   -0.0000075264  0.0000004872  0.0000076428 -0.0000048833]
+             [-0.0000021208  0.000003735   0.0000005891 -0.0000048834  0.0000027188]]
             >>> error = diff.abs.sum
             >>> error
             7.551744725834558e-05

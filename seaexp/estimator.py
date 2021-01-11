@@ -21,8 +21,9 @@ class Estimator(withPairCheck):
         available abbreviations: lsb, ab, nlb, restarts
     """
 
-    def __init__(self, known_points, kernel_alias, **params):
+    def __init__(self, known_points, kernel_alias, seed=0, **params):
         self.known_points, self.kernel_alias, self.params = known_points, kernel_alias, params
+        self.seed = seed
 
         if "lsb" in self.params:
             self.params["length_scale_bounds"] = self.params.pop("lsb")
@@ -45,7 +46,9 @@ class Estimator(withPairCheck):
         else:
             raise Exception("Unknown kernel:", self.kernel_alias)
 
-        self.gpr = GaussianProcessRegressor(kernel=self.kernel, n_restarts_optimizer=self.restarts, copy_X_train=True)
+        self.gpr = GaussianProcessRegressor(
+            kernel=self.kernel, n_restarts_optimizer=self.restarts, copy_X_train=True, random_state=self.seed
+        )
         self.gpr.fit(*known_points.xy_z)
         # self.gpr.fit(np.array(*known_points.xy_z))
 
@@ -74,7 +77,7 @@ class Estimator(withPairCheck):
         -------
             Estimated value z'.
         """
-        if not isinstance(x_tup, (list, )):
+        if not isinstance(x_tup, (list,)):  # TODO: accept Probings?
             x_tup = [self._check_pair(x_tup, y)]
         elif y:
             raise Exception(f"Cannot provide both x_tup as list and y={y}.")
