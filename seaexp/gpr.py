@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from seaexp.probings import Probings
 
 if TYPE_CHECKING:
-    from seaexp.probings import Probings
     from seaexp.seabed import Seabed
 
 import math
@@ -49,15 +49,13 @@ class GPR:
         for training
     kernel_alias
         available abbreviations: quad, rbf, matern, expsine, white
-        TODO:quad+rbf+... (Addition of GPR is not implemented yet. However, estimators can be added in the mean time.)
     params
         sklearn parameters for both kernel and GPR
         available abbreviations: lsb, ab, nlb, restarts
     """
 
     @ignore_warnings(category=ConvergenceWarning)
-    def __init__(self, known_points, kernel_alias, seed=0, signal=1, **params):
-        self.known_points = known_points
+    def __init__(self, kernel_alias, seed=0, signal=1, **params):
         self.kernel_alias = kernel_alias
         self.seed = seed
         self.signal = signal
@@ -83,51 +81,31 @@ class GPR:
             self.kernel = WhiteKernel(**self.params)
         else:
             raise Exception("Unknown kernel:", self.kernel_alias)
-        self.gpr_func = lambda: SkGPR(kernel=self.kernel, n_restarts_optimizer=self.restarts, copy_X_train=True,
-                                      random_state=self.seed)
+        self.skgpr_func = lambda: SkGPR(kernel=self.kernel, n_restarts_optimizer=self.restarts, copy_X_train=True,
+                                        random_state=self.seed)
 
     @property
-    def gpr(self):
-        """A new GaussianProcessRegressor object already configured."""
-        return self.gpr_func()
+    def skgpr(self):
+        """A new (unfit) sklearn GaussianProcessRegressor object already configured."""
+        return self.skgpr_func()
 
     @ignore_warnings(category=ConvergenceWarning)
-    def model(self, probings):
-        """Return the induced model according to the provided probings."""
-        gpr = self.gpr
-        gpr.fit(*probings.xy_z)
-        return GPRModel(gpr)
+    def __call__(self, probings):
+        """Return the induced estimator according to the provided probings."""
+        return Estimator(self.skgpr, probings)
 
     def __add__(self, gpr, restarts=None):
         """Compose two kernels to create a new GPR."""
+        params = self.params.copy()
         if restarts:
-            self.params["restarts"] = restarts
+            params["restarts"] = restarts
         elif self.restarts != gpr.restarts:
             raise Exception(f"Number of restarts should be provided explicitly when both estimators disagree:\n"
                             f"{self.restarts} != {gpr.restarts}.")
 
-        estimator = GPR(self.kernel_alias, **self.params)  # era Estim... TODO
+        estimator = GPR(self.kernel_alias, **params)
         estimator.kernel += gpr.kernel
         return estimator
-
-    def __call__(self, x_tup, y=None):
-        """
-        Estimated value at the given point.
-        Parameters
-        ----------
-        x_tup
-            x value or a tuple (x, y)
-        y
-            y value or None
-        Returns
-        -------
-            Estimated value z'.
-        """
-        if not isinstance(x_tup, (list,)):  # TODO: accept Probings?
-            x_tup = [self._check_pair(x_tup, y)]
-        elif y:
-            raise Exception(f"Cannot provide both x_tup as list and y={y}.")
-        return self.signal * float(self.gpr.predict(x_tup))
 
     @classmethod
     def fromoptimizer(cls, known_points: 'Probings', testing_points: 'Probings', seed=0,
@@ -167,14 +145,13 @@ class GPR:
         -------
 
         """
-        from seaexp.probings import Probings
         if algo is None:
             algo = tpe.suggest
         minerror = [math.inf]
 
         @ignore_warnings(category=ConvergenceWarning)
         def objective(kwargs):
-            estimator = GPR(known_points, seed=seed, **kwargs)  # era Estim... TODO
+            estimator = GPR(seed=seed, **kwargs)(known_points)
             errors = testing_points - testing_points @ estimator
             error = errors.abs.sum
             if verbosity > 1:
@@ -203,24 +180,26 @@ class GPR:
         if verbosity > 0:
             print("Lowest error:", minerror[0])
 
-        return GPR(known_points, seed=seed, **cfg)  # era Estim... TODO
-
-    def __neg__(self):
-        newestimator = copy(self)
-        newestimator.signal = -1
-        return newestimator
+        return GPR(seed=seed, **cfg)
 
     def __str__(self):
-        return f"Estimator(\n\t" \
-               f"points: {self.known_points.n}, kernel: {self.kernel_alias}, seed: {self.seed}, signal: {self.signal}" \
+        return f"GPR(\n\t" \
+               f"kernel: {self.kernel_alias}, seed: {self.seed}, signal: {self.signal}" \
                f"\n\tparams: {rf(self.params, 6)}\n)"
 
 
 @dataclass
-class GPRModel(withPairCheck):
+class Estimator(withPairCheck):
+    skgpr: SkGPR
+    probings: Probings
+    scale: float = 1
+
+    def __post_init__(self):
+        self.skgpr.fit(*self.probings.xy_z)
+
     def __call__(self, x_tup, y=None):
         """
-        Estimated value at the given point, list or Probings obj.
+        Estimated value(s) at the given point, list or Probings obj.
         Parameters
         ----------
         x_tup
@@ -235,4 +214,9 @@ class GPRModel(withPairCheck):
             x_tup = [self._check_pair(x_tup, y)]
         elif y:
             raise Exception(f"Cannot provide both x_tup as list and y={y}.")
-        return self.gpr.predict(x_tup)
+        return self.scale * float(self.skgpr.predict(x_tup))
+
+    def __neg__(self):
+        newestimator = copy(self)
+        newestimator.scale = -1
+        return newestimator

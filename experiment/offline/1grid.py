@@ -8,7 +8,7 @@ Proceed adding points to the trip until the budget (T on paper) is exhausted.
 """
 import numpy as np
 
-from seaexp.estimator import Estimator
+from seaexp import GPR
 from seaexp.probings import Probings, cv
 from seaexp.seabed import Seabed
 
@@ -27,9 +27,8 @@ initial_known_points.show()
 # Select kernel+params for estimator.
 # ! I opted for k-fold CV because using 'initially_known_points' for both training and test is prone to overfitting.
 for training, test in cv(initial_known_points, rnd=rnd):
-    estimator = Estimator.fromoptimizer(training, test, seed=seed, verbosity=1, max_evals=10)
-
-print(estimator)
+    estimator = GPR.fromoptimizer(training, test, seed=seed, verbosity=1, max_evals=10)
+    print(estimator)
 
 # Select point of maximum variance.
 

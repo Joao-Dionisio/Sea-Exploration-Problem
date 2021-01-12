@@ -6,7 +6,7 @@ from typing import Union, TYPE_CHECKING
 from seaexp.abs.mixin.withPairCheck import withPairCheck
 
 # if TYPE_CHECKING:
-from seaexp.estimator import Estimator
+from seaexp.gpr import Estimator
 from seaexp.probings import Probings
 
 
