@@ -24,11 +24,10 @@ f4, f5, f6 = sfg(0.05, 75, 0.52266, 0.19859), sfg(0.15, 25, 0.24493, 0.7871), sf
 initial_known_points = Probings.fromgrid(6, f1 + f2 + f3 + f4 + f5)
 initial_known_points.show()
 
-
 # Select kernel+params for estimator.
 # ! I opted for k-fold CV because using 'initially_known_points' for both training and test is prone to overfitting.
 for training, test in cv(initial_known_points, rnd=rnd):
-    estimator = Estimator.fromoptimizer(training, test, seed=seed, verbose=False, max_evals=100)
+    estimator = Estimator.fromoptimizer(training, test, seed=seed, verbosity=1, max_evals=10)
 
 print(estimator)
 

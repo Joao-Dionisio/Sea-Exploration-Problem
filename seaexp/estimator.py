@@ -114,7 +114,7 @@ class Estimator(withPairCheck):
 
     @classmethod
     def fromoptimizer(cls, known_points: 'Probings', testing_points: 'Probings', seed=0,
-                      param_space=None, algo=None, max_evals=10, verbose=False):
+                      param_space=None, algo=None, max_evals=10, verbosity=1):
         """
         Hyperopt error minimizer for kernel search
 
@@ -143,7 +143,8 @@ class Estimator(withPairCheck):
         max_evals
         algo
             default = tpe.suggest
-        verbose
+        verbosity
+            0, 1 or 2
 
         Returns
         -------
@@ -159,7 +160,7 @@ class Estimator(withPairCheck):
             estimator = Estimator(known_points, seed=seed, **kwargs)
             errors = testing_points - testing_points @ estimator
             error = errors.abs.sum
-            if verbose:
+            if verbosity == 2:
                 k = kwargs.pop("kernel_alias")
                 print(f"{round(error, 1)} \t{k} \t{json.dumps(kwargs, sort_keys=True)}")
             if error < minerror[0]:
@@ -180,9 +181,9 @@ class Estimator(withPairCheck):
         rnd = np.random.RandomState(seed=0)  # rnd = np.random.default_rng(seed)
 
         # Select minimum error config.
-        best = fmin(objective, param_space, algo=algo, max_evals=max_evals, rstate=rnd, show_progressbar=verbose)
+        best = fmin(objective, param_space, algo=algo, max_evals=max_evals, rstate=rnd, show_progressbar=verbosity > 0)
         cfg = space_eval(param_space, best)
-        if verbose:
+        if verbosity > 0:
             print("Lowest error:", minerror[0])
 
         return Estimator(known_points, seed=seed, **cfg)
