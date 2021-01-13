@@ -136,10 +136,7 @@ class GPR:
             >>> known_points = Probings(points)
             >>> estimator = GPR.fromoptimizer(known_points, k=2, verbosity=0)
             >>> print(estimator)  # doctest: +NORMALIZE_WHITESPACE
-            GPR(
-                kernel: matern, seed: 0, signal: 1
-                params: {'nu': 1.353602, 'length_scale_bounds': [0.1, 10]}
-            )
+            GPR(kernel:rbf, seed:0, signal:1, params:{'length_scale_bounds': [0.001, 0.1]})
 
         Parameters
         ----------
