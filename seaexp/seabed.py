@@ -1,12 +1,10 @@
 import math
-import numpy as np
 from dataclasses import dataclass
-from typing import Union, TYPE_CHECKING
+from typing import Union
 
+from seaexp import GPR
 from seaexp.abs.mixin.withPairCheck import withPairCheck
-
 # if TYPE_CHECKING:
-from seaexp.gpr import Estimator
 from seaexp.probings import Probings
 
 
@@ -19,12 +17,13 @@ class Seabed(withPairCheck):
         if not isinstance(self.functions, list):
             self.functions = [self.functions]
 
-    def __call__(self, x_tup, y=None):
+    def __call__(self, x, y=None):
         """
-        True value at the given point.
+        True value at the given point, or probings.
+
         Parameters
         ----------
-        x_tup
+        x
             x value or a tuple (x, y)
         y
             y value or None
@@ -32,7 +31,13 @@ class Seabed(withPairCheck):
         -------
             True value z.
         """
-        x, y = self._check_pair(x_tup, y)
+        if y is None:
+            if isinstance(x, Probings):
+                return x ^ self
+            elif isinstance(x, tuple):
+                x, y = x
+            else:
+                raise Exception(f"Missing exactly one of: Probings, tuple or x,y float values.")
         value = 0
         for f in self.functions:
             value += f(x, y)
@@ -40,31 +45,26 @@ class Seabed(withPairCheck):
 
     def __add__(self, other):
         """Create a new seabed by adding another."""
-        functions_from_other = [other] if isinstance(other, Estimator) else other.functions
+        functions_from_other = [other] if not isinstance(other, Seabed) else other.functions
 
         return Seabed(self.functions + functions_from_other)
 
     @classmethod
-    def fromgaussian(cls, sigma=1, ampl=1, xcenter_tup=(0, 0), ycenter=None):
+    def fromgaussian(cls, x=0, y=0, z=0, s=1, a=1, center=None):
         """
         Callable Gaussian function.
 
         Parameters
         ----------
-        sigma
-        ampl
-        xcenter_tup
-            x center coordinate or a tuple (x, y)
-        ycenter
-            y center coordinate or None
+        s
 
         Returns
         -------
 
         """
-        center = cls._check_pair(xcenter_tup, ycenter)
+        center = cls._check_pair(x, y, center)
         return Seabed(
-            lambda x, y: ampl * math.exp(- ((x - center[0]) / sigma) ** 2 / 2 - ((y - center[1]) / sigma) ** 2 / 2)
+            lambda x, y: z + a * math.exp(- ((x - center[0]) / s) ** 2 / 2 - ((y - center[1]) / s) ** 2 / 2)
         )
 
     def __sub__(self, other):
@@ -73,7 +73,7 @@ class Seabed(withPairCheck):
         Usage:
             >>> real_seabed = Seabed(lambda a, b: a * b)
             >>> training_set = Probings.fromgrid(side=5, f=real_seabed)
-            >>> estimated_seabed = Seabed(Estimator(training_set, "rbf"))
+            >>> estimated_seabed = GPR("rbf")(training_set)
             >>> diff = Probings.fromgrid(side=5, f=real_seabed - estimated_seabed)
             >>> diff.show()
             [[ 0.00000176 -0.0000035  -0.00000031  0.00000417 -0.00000212]
@@ -85,7 +85,7 @@ class Seabed(withPairCheck):
             >>> error
             7.551744725834558e-05
             """
-        if isinstance(other, Estimator):
+        if not isinstance(other, Seabed):
             other = Seabed(other)
         return self + -other
 

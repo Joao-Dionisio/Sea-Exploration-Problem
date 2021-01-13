@@ -34,6 +34,8 @@ class Probings:
          [ nan  nan  nan  nan 0.34]]
     """
     points: dict
+    name: str = None
+    plots = []
     _np = None
 
     def __lshift__(self, point):
@@ -50,7 +52,7 @@ class Probings:
         return Probings(newpoints)
 
     @classmethod
-    def fromgrid(cls, side=4, f=lambda *_: 0):  # , simulated=None):
+    def fromgrid(cls, side=4, f=lambda *_: 0.0, name=None):  # , simulated=None):
         """A new Probings object containing 'side'x'side' 2D points with z values given by function 'f'.
 
         Leave a margin of '1 / (2 * side)' around extreme points.
@@ -71,20 +73,24 @@ class Probings:
         for x in ap[margin, 3 * margin, ..., 1]:
             for y in ap[margin, 3 * margin, ..., 1]:
                 points[x, y] = f(x, y)  # , true_value
-        return Probings(points)
+        return Probings(points, name=name)
 
     @classmethod
-    def fromrandom(cls, size=16, f=lambda *_: 0, rnd=numpy.random.default_rng(0)):  # simulated=None,
+    def fromrandom(cls, size=16, f=lambda *_: 0.0, rnd=None, name=None):  # simulated=None,
         """A new Probings object containing 'size' 2D points with z values given by function 'f'."""
         # if simulated is not None:
         #     raise NotImplementedError("'simulated' flag still not ready.")
         # true_value = not simulated  TODO
+        if rnd is None:
+            rnd = numpy.random.default_rng(0)
+        if isinstance(rnd, int):
+            rnd = numpy.random.default_rng(rnd)
         points = {}
         for i in range(size):
             x = rnd.random()
             y = rnd.random()
             points[x, y] = f(x, y)  # , true_value
-        return Probings(points)
+        return Probings(points, name=name)
 
     @property
     def np(self):
@@ -124,6 +130,14 @@ class Probings:
     def xy_z(self):
         return [numpy.array(pair) for pair in self.xy], self.z
 
+    @cached_property
+    def x_y_z(self):
+        return tuple(zip(*self.xy)) + (self.z,)
+
+    @cached_property
+    def xyz(self):
+        return [(x, y, z) for (x, y), z in self]
+
     def __iter__(self):
         yield from self.points.items()
 
@@ -136,10 +150,10 @@ class Probings:
         The points need to match. Otherwise, see Seabed.__sub__.
 
         Usage:
-            >>> from seaexp.estimator import Estimator
+            >>> from seaexp.gpr import GPR
             >>> true_value = lambda a, b: a * b
             >>> real = Probings.fromgrid(side=5, f=true_value)
-            >>> estimator = Estimator(real, "rbf")
+            >>> estimator = GPR("rbf")(real)
             >>> estimated = Probings.fromgrid(side=5, f=estimator)
             >>> (real - estimated).show()
             [[ 0.00000176 -0.0000035  -0.00000031  0.00000417 -0.00000212]
@@ -219,7 +233,8 @@ class Probings:
     def __call__(self, x, y):
         return self[(x, y)]
 
-    def __matmul__(self, f):
+    # noinspection PyUnresolvedReferences
+    def __xor__(self, f):
         """Replace z values according to the given function
 
         Usage:
@@ -230,7 +245,7 @@ class Probings:
              [0. 0. 0. 0. 0.]
              [0. 0. 0. 0. 0.]
              [0. 0. 0. 0. 0.]]
-            >>> (zeroed @ (lambda x, y: x * y)).show()
+            >>> (zeroed ^ (lambda x, y: x * y)).show()
             [[0.01 0.03 0.05 0.07 0.09]
              [0.03 0.09 0.15 0.21 0.27]
              [0.05 0.15 0.25 0.35 0.45]
@@ -282,8 +297,30 @@ class Probings:
 
         return Probings(self.points | other.points)
 
+    def plot(self, xlim=(0, 1), ylim=(0, 1), zlim=(0, 1), name=None, block=True):
+        """
 
-def cv(probings, k=5, rnd=numpy.random.default_rng(0)):
+        Usage:
+            >>> from seaexp import Seabed
+            >>> f = Seabed.fromgaussian()
+            >>> g = Seabed.fromgaussian()
+            >>> probings = Probings.fromrandom(20, f  + g)
+            >>> probings.plot()
+
+        Returns
+        -------
+
+        """
+        from seaexp.plotter import Plotter
+        plt = Plotter(xlim, ylim, zlim, name, inplace=False, block=block)
+        name_ = self.name
+        self.name = None
+        plt << self
+        self.name = name_
+        self.plots.append(plt)  # Keeps a reference, so plt destruction (and  window creation) is delayed.
+
+
+def cv(probings, k=5, rnd=None):
     """
     Usage:
         >>> probings = Probings({(0, 0): 0, (1, 1): 0, (2, 2): 0, (3, 3): 0, (4, 4): 0, (5, 5): 0})
@@ -313,6 +350,10 @@ def cv(probings, k=5, rnd=numpy.random.default_rng(0)):
     -------
 
     """
+    if probings.n < k:
+        raise Exception(f"Number of points ({probings.n}) is smaller than k ({k}).")
+    if rnd is None:
+        rnd = numpy.random.default_rng(0)
     min_fold_size, rem = divmod(probings.n, k)
     shuffled = probings.shuffled(rnd)
     folds = []

@@ -6,6 +6,7 @@ Optimization and machine learning for sea bed exploration
 
 # install
 ```
+sudo apt-get install python3-tk
 git clone https://github.com/oceanbed/surface
 cd surface
 ```

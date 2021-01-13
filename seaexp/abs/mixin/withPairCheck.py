@@ -1,9 +1,8 @@
 class withPairCheck:
     @staticmethod
-    def _check_pair(x_tup, y):
-        if isinstance(x_tup, tuple):
-            if y:
-                raise Exception(f"Cannot provide both x={x_tup} and y={y}.")
-            x, y = x_tup
+    def _check_pair(x, y, center):
+        if center is None:
             return x, y
-        return x_tup, y
+        if x not in [0, center[0]] or y not in [0, center[1]]:
+            raise Exception(f"Cannot provide both x={x} (or y{y}) and a center={center}.")
+        return center

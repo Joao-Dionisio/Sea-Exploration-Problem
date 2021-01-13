@@ -9,29 +9,43 @@ Proceed adding points to the trip until the budget (T on paper) is exhausted.
 import numpy as np
 
 from seaexp import GPR
-from seaexp.probings import Probings, cv
+from seaexp.plotter import Plotter
+from seaexp.probings import Probings
 from seaexp.seabed import Seabed
 
 seed = 0
 rnd = np.random.default_rng(seed)
 
-# Create initial known points and testing set.
-sfg = Seabed.fromgaussian
-f1, f2, f3 = sfg(0.1, 100, 0.35113, 0.070836), sfg(0.05, 75, 0.48802, 0.28421), sfg(0.1, 50, 0.032971, 0.20382)
-f4, f5, f6 = sfg(0.05, 75, 0.52266, 0.19859), sfg(0.15, 25, 0.24493, 0.7871), sfg(0.49985, 5.3545, 0.19934, 0.50696)
-# f7, f8 = sfg(0.011509, 80.985, 0.63317, 0.34842), sfg(0.12154, 78.089, 0.97123, 0.63791)
-# f9, f10 = sfg(0.10809, 67.355, 0.9706, 0.27782), sfg(0.40523, 0.28157, 0.029318, 32.567)
-initial_known_points = Probings.fromgrid(6, f1 + f2 + f3 + f4 + f5)
-initial_known_points.show()
+with Plotter(zlim=(0, 100)) as plt:
+    # Create initially known points.
+    gaus = Seabed.fromgaussian
+    f1, f2 = gaus(0.35113, 0.070836, s=0.1, a=100), gaus(0.48802, 0.28421, s=0.05, a=75)
+    f3, f4 = gaus(0.032971, 0.20382, s=0.1, a=50), gaus(0.52266, 0.19859, s=0.05, a=75)
+    f5, f6 = gaus(0.24493, 0.7871, s=0.15, a=25), gaus(0.19934, 0.50696, s=0.49985, a=5.3545)
+    f7, f8 = gaus(0.63317, 0.34842, s=0.011509, a=80.985), gaus(0.97123, 0.63791, s=0.12154, a=78.089)
+    f9, f10 = gaus(0.9706, 0.27782, s=0.10809, a=67.355), gaus(0.40523, 0.28157, s=0.029318, a=32.567)
+    true_f = f1 + f2 + f3 + f4 + f5  # + f6 + f7 + f8 + f9 + f10)
+    true_discrete = Probings.fromgrid(side=33, f=true_f, name="true")
+    plt << true_discrete
 
-# Select kernel+params for estimator.
-# ! I opted for k-fold CV because using 'initially_known_points' for both training and test is prone to overfitting.
-for training, test in cv(initial_known_points, rnd=rnd):
-    estimator = GPR.fromoptimizer(training, test, seed=seed, verbosity=1, max_evals=10)
-    print(estimator)
+    # Known points from past trips.
+    initially_known = Probings.fromgrid(side=3, f=true_f, name="known")
+    plt << initially_known
 
-# Select point of maximum variance.
+    # Select kernel+params for estimator.
+    # ! I opted for k-fold CV because using 'initially_known_points' for both training and test is prone to overfitting.
+    gpr = GPR.fromoptimizer(initially_known, seed=seed, verbosity=2, max_evals=10)
+    print(f"Selected kernel/config: {gpr}\n")
 
+    # Select point of maximum variance.
+    mean_estimator, std_estimator = gpr(initially_known, stdev=True)
+    stds = std_estimator(Probings.fromgrid(side=10))  # create a zeroed grid, and replace zeros by variance (z=std)
+    stds.name = "stdev"
+    plt << stds
+
+    means = mean_estimator(Probings.fromgrid(side=10))
+    means.name = "mean"
+    plt << means
 
 """
 
