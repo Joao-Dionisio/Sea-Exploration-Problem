@@ -77,13 +77,14 @@ class Plotter:
             return
 
         #  Reconfigure, if the Plotter object is used as callable.
-        name = other.name or name or self.name or ""
+        name = \
+            (("" if self.name is None else self.name) if name is None else name) if other.name is None else other.name
         xmin, xmax = self.xlim if xlim is None else xlim
         ymin, ymax = self.ylim if ylim is None else ylim
         zmin, zmax = self.zlim if zlim is None else zlim
         inplace = inplace or self.inplace
         block = block if block is not None else (self.block is None or self.block)
-        delay = delay or self.delay
+        delay = self.delay if delay is None else delay
         color = color or self.color
 
         # Setup/update window.
