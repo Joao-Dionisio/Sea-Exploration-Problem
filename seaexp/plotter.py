@@ -68,7 +68,6 @@ class Plotter:
 
     def __lshift__(self, other, name=None, xlim=None, ylim=None, zlim=None, inplace=None, block=None, color=None):
         """        Create a new plot from a Probings object. See __init__ doc for details.        """
-        print(block)
         #  Reconfigure, if the Plotter object is used as callable.
         name = other.name or name or self.name or ""
         xmin, xmax = self.xlim if xlim is None else xlim
