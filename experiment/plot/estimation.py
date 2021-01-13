@@ -1,10 +1,5 @@
 """
-Grid Maximum-Variance Experiment
-
-Select the point of maximum variance on the grid (G on paper) and recalculate variances.
-Proceed until no improvement is made. This results in the surface maximum variance point being added to the trip.
-
-Proceed adding points to the trip until the budget (T on paper) is exhausted.
+Some plots of means and stdevs for a selected kernel
 """
 import numpy as np
 
@@ -44,21 +39,7 @@ with Plotter(zlim=(0, 100)) as plt:
     plt(zlim=(0, 2), color="gray") << stds
     print(f"Maximum stdev: {stds.max} ; min: {stds.min}")
 
-
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-err = -1 * cross_val_score(gpr, xys, zs, scoring='neg_mean_absolute_error', cv=5).mean()
-"""
+    # Plot means out of curiosity
+    means = mean_estimator(candidates)
+    means.name = "mean"
+    plt << means
