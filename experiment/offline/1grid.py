@@ -29,11 +29,11 @@ with Plotter(zlim=(0, 100)) as plt:
     plt << true_discrete
 
     # Known points from past trips.
-    initially_known = Probings.fromgrid(side=8, f=true_f, name="known")
+    initially_known = Probings.fromgrid(side=6, f=true_f, name="known")
     plt << initially_known
 
     # Select kernel+params for estimator.
-    gpr = GPR.fromoptimizer(initially_known, seed=seed, verbosity=2, max_evals=100)
+    gpr = GPR.fromoptimizer(initially_known, seed=seed, verbosity=2, max_evals=10)
     print(f"Selected kernel/config: {gpr}\n")
 
     # Select point of maximum variance.
