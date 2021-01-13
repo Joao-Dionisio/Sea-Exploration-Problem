@@ -1,7 +1,11 @@
 """
 Grid Maximum-Variance Experiment
 
-Select the point of maximum variance on the grid (G on paper) and recalculate variances.
+[   lembrete: talvez esse exp. ainda seja pré-artigo, pois me parece que o primeiro
+    algoritmo do novo paper já fala em amostrar de uma gaussiana sobre o ponto do grid. ]
+
+Select the point of maximum variance on the grid (G on paper),
+adopt estimated value as a real probing, refit GPR and recalculate variances.
 Proceed until no improvement is made. This results in the surface maximum variance point being added to the trip.
 
 Proceed adding points to the trip until the budget (T on paper) is exhausted.
@@ -16,7 +20,7 @@ from seaexp.seabed import Seabed
 seed = 0
 rnd = np.random.default_rng(seed)
 
-with Plotter(zlim=(0, 100)) as plt:
+with Plotter(zlim=(0, 100), inplace=True) as plt:
     # Create (continuous and discrete) seabed true function.
     gaus = Seabed.fromgaussian
     f1, f2 = gaus(0.35113, 0.070836, s=0.1, a=100), gaus(0.48802, 0.28421, s=0.05, a=75)
@@ -29,21 +33,29 @@ with Plotter(zlim=(0, 100)) as plt:
     plt << true_discrete
 
     # Known points from past trips.
-    initially_known = Probings.fromgrid(side=6, f=true_f, name="known")
-    plt << initially_known
+    known = Probings.fromgrid(side=6, f=true_f, name="known")
+    plt << known
 
     # Select kernel+params for estimator.
-    gpr = GPR.fromoptimizer(initially_known, seed=seed, verbosity=2, max_evals=10)
+    gpr = GPR.fromoptimizer(known, seed=seed, verbosity=2, max_evals=10)
     print(f"Selected kernel/config: {gpr}\n")
 
-    # Select point of maximum variance.
-    mean_estimator, std_estimator = gpr(initially_known, stdev=True)
-    candidates = Probings.fromgrid(side=10)  # create a zeroed grid, and replace the zeros by variances (z=std)
-    stds = std_estimator(candidates)
-    stds.name = "stdev"
-    plt(zlim=(0, 2), color="gray") << stds
-    print(f"Maximum stdev: {stds.max} ; min: {stds.min}")
-
+    # Loop
+    extended = known
+    i = 0
+    while i < 10:
+        # Add point of maximum variance (with simulated z value) to the set of training points (extended_points).
+        fmean, fstd = gpr(extended, stdev=True)  # Get estimators fxxx.
+        candidates = Probings.fromgrid(side=10)  # create a zeroed grid, and replace the zeros by variances (z=std)
+        stds = fstd(candidates)
+        stds.name = "stdev"
+        plt(zlim=(0, 2), color="gray", delay=0) << stds
+        maxs = stds.argmax
+        newpoint = tuple(rnd.choice(maxs))
+        extended <<= newpoint, fmean(newpoint)
+        print(f"Points: {maxs}\n\twith maximum stdev: {stds.max}\t|\t min stdev: {stds.min}\n\tchosen: {newpoint}"
+              f"\n new size: {extended.n}")
+        i += 1
 
 """
 

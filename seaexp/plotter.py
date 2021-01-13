@@ -51,10 +51,13 @@ class Plotter:
     zlim: tuple = 0, 1
     inplace: bool = False
     block: bool = None
+    delay: float = 1
     color: str = "jet"
+    visible: bool = True
     wframe = None
     root = None
     plots = 0
+    quit = False
 
     def __post_init__(self):
         plt.ion()
@@ -64,10 +67,15 @@ class Plotter:
     def _setup(self):
         fig = plt.figure(self.name)
         ax = fig.gca(projection='3d')
+        self.plots += 1
         return fig, ax
 
-    def __lshift__(self, other, name=None, xlim=None, ylim=None, zlim=None, inplace=None, block=None, color=None):
+    def __lshift__(self, other,
+                   name=None, xlim=None, ylim=None, zlim=None, inplace=None, block=None, delay=None, color=None):
         """        Create a new plot from a Probings object. See __init__ doc for details.        """
+        if not self.visible or self.quit:
+            return
+
         #  Reconfigure, if the Plotter object is used as callable.
         name = other.name or name or self.name or ""
         xmin, xmax = self.xlim if xlim is None else xlim
@@ -75,6 +83,7 @@ class Plotter:
         zmin, zmax = self.zlim if zlim is None else zlim
         inplace = inplace or self.inplace
         block = block if block is not None else (self.block is None or self.block)
+        delay = delay or self.delay
         color = color or self.color
 
         # Setup/update window.
@@ -83,7 +92,6 @@ class Plotter:
         ax.set_ylim(ymin, ymax)
         ax.set_zlim(zmin, zmax)
         fig.canvas.set_window_title(name)
-        self.plots += 1
         fig.canvas.mpl_connect('key_press_event', self._control_quit)  # ax.set_title(other.name)
         if inplace and self.wframe:
             ax.collections.remove(self.wframe)  # For animation.
@@ -92,40 +100,46 @@ class Plotter:
         self.wframe = ax.plot_trisurf(*other.x_y_z, cmap=color)
         if block:
             plt.show(block=True)
-        plt.pause(0.001)
+        try:
+            plt.pause(0.001 + delay)
+        except:
+            pass
 
     @staticmethod
-    def wait():
-        root = tk.Tk()
-        root.geometry("500x100+0+0")
-        Application(root)
-        root.mainloop()
-
-    @staticmethod
-    def delay(secs=1):
+    def wait(secs=None):
+        if secs is None:
+            root = tk.Tk()
+            root.geometry("500x100+0+0")
+            Application(root)
+            root.mainloop()
+            return
         sleep(secs)
 
     def __enter__(self):
         return self(block=self.block if self.block is not None else False)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.visible or self.quit:
+            return
         self.root = tk.Tk()
         self.root.geometry("500x100+0+0")
         Application(self.root)
         self.root.mainloop()
 
     def _control_quit(self, ev):
-        if ev.key == "q" and self.root is not None:
+        if ev.key == "q":
             self.plots -= 1
             if self.plots == 0:
-                self.root.quit()
+                self.quit = self.inplace and not self.block
+                if self.root is not None:
+                    self.root.quit()
 
     def __hash__(self):
         return id(self)
 
-    def __call__(self, name=None, xlim=None, ylim=None, zlim=None, inplace=None, block=None, color=None):
+    def __call__(self, name=None, xlim=None, ylim=None, zlim=None, inplace=None, block=None, delay=None, color=None):
         from seaexp.reconfiguredplotter import ReconfiguredPlotter
-        return ReconfiguredPlotter(self, name, xlim, ylim, zlim, inplace, block, color)
+        return ReconfiguredPlotter(self, name, xlim, ylim, zlim, inplace, block, delay, color)
 
 
 class Application(ttk.Frame):

@@ -35,16 +35,24 @@ class Probings:
     """
     points: dict
     name: str = None
+    eq_threshold: float = 0
     plots = []
     _np = None
 
     def __lshift__(self, point):
-        """Add a tuple (x, y, z) to the set.
+        """Add a tuple (x, y, z) or ((x, y), z) to the set.
 
-        If z is a tuple (z', b), b is a boolean indicating whether z' is a true value.  (TODO)
+        Not implemented yet: If z is a tuple (z', b), b is a boolean indicating whether z' is a true value.  (TODO)
 
         Return a Probings object which is an extended set of points"""
-        key, val = point[:2], point[-1]
+        if isinstance(point[0], tuple):
+            if len(point) != 2:
+                raise Exception(f"Wrong parameters: {point}. Expected a 2-tuple and a float.")
+            key, val = point[0], point[1]
+        else:
+            if len(point) != 3:
+                raise Exception(f"Wrong parameters: {point}. Expected a 3-tuple of floats.")
+            key, val = point[:2], point[-1]
         if key in self.points:
             print(f"W: overriding old {key} value {self.points[key]} with {val} in the new set of points")
         newpoints = self.points.copy()
@@ -321,7 +329,13 @@ class Probings:
 
     @cached_property
     def max(self):
+        """Return maximum z."""
         return max(self.z)
+
+    @cached_property
+    def argmax(self):
+        """Return list of x,y points with maximum z."""
+        return [(x, y) for z, (x, y) in zip(self.z, self.xy) if abs(z - self.max) <= self.eq_threshold]
 
     @cached_property
     def min(self):

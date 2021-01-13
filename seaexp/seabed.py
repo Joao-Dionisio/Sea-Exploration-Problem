@@ -37,7 +37,7 @@ class Seabed(withPairCheck):
             elif isinstance(x, tuple):
                 x, y = x
             else:
-                raise Exception(f"Missing exactly one of: Probings, tuple or x,y float values.")
+                raise Exception(f"Missing exactly one of: Probings, tuple or x,y float values. Got:", x)
         value = 0
         for f in self.functions:
             value += f(x, y)
