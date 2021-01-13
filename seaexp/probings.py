@@ -319,6 +319,14 @@ class Probings:
         self.name = name_
         self.plots.append(plt)  # Keeps a reference, so plt destruction (and  window creation) is delayed.
 
+    @cached_property
+    def max(self):
+        return max(self.z)
+
+    @cached_property
+    def min(self):
+        return min(self.z)
+
 
 def cv(probings, k=5, rnd=None):
     """

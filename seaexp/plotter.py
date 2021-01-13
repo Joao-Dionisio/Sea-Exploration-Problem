@@ -16,6 +16,7 @@ class Plotter:
     zlim: tuple = 0, 1
     name: str = None
     inplace: bool = False
+    color: str = "jet"
     block: bool = False
     wframe = None
     root = None
@@ -48,16 +49,20 @@ class Plotter:
     def setup(self):
         fig = plt.figure(self.name)
         ax = fig.gca(projection='3d')
-        xmin, xmax = self.xlim
-        ymin, ymax = self.ylim
-        zmin, zmax = self.zlim
+        return fig, ax
+
+    def __lshift__(self, other, name=None, xlim=None, ylim=None, zlim=None, color="jet", block=None):
+        if block is None:
+            block = self.block
+
+        fig, ax = (self.fig, self.ax) if self.inplace else self.setup()
+        xmin, xmax = self.xlim if xlim is None else xlim
+        ymin, ymax = self.ylim if ylim is None else ylim
+        zmin, zmax = self.zlim if zlim is None else zlim
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         ax.set_zlim(zmin, zmax)
-        return fig, ax
 
-    def __lshift__(self, other):
-        fig, ax = (self.fig, self.ax) if self.inplace else self.setup()
         name = (self.name if other.name is None else other.name) or ""
         fig.canvas.set_window_title(name)
         self.plots += 1
@@ -67,15 +72,16 @@ class Plotter:
 
         if self.inplace and self.wframe:
             ax.collections.remove(self.wframe)
-        self.wframe = ax.plot_trisurf(*other.x_y_z, cmap='twilight_shifted')
+        self.wframe = ax.plot_trisurf(*other.x_y_z, cmap=color)
 
-        if self.block:
+        if block:
             plt.show(block=True)
         plt.pause(0.001)
 
     @staticmethod
     def wait():
         root = tk.Tk()
+        root.geometry("500x100+0+0")
         Application(root)
         root.mainloop()
 
@@ -88,6 +94,7 @@ class Plotter:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.root = tk.Tk()
+        self.root.geometry("500x100+0+0")
         Application(self.root)
         self.root.mainloop()
 
@@ -99,6 +106,10 @@ class Plotter:
 
     def __hash__(self):
         return id(self)
+
+    def __call__(self, name=None, xlim=None, ylim=None, zlim=None, color="jet", block=None):
+        from seaexp.customlshift import CustomLShift
+        return CustomLShift(self, name, xlim, ylim, zlim, color, block)
 
 
 class Application(ttk.Frame):

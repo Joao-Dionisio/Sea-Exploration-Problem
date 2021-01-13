@@ -17,7 +17,7 @@ seed = 0
 rnd = np.random.default_rng(seed)
 
 with Plotter(zlim=(0, 100)) as plt:
-    # Create initially known points.
+    # Create (continuous and discrete) seabed true function.
     gaus = Seabed.fromgaussian
     f1, f2 = gaus(0.35113, 0.070836, s=0.1, a=100), gaus(0.48802, 0.28421, s=0.05, a=75)
     f3, f4 = gaus(0.032971, 0.20382, s=0.1, a=50), gaus(0.52266, 0.19859, s=0.05, a=75)
@@ -29,21 +29,22 @@ with Plotter(zlim=(0, 100)) as plt:
     plt << true_discrete
 
     # Known points from past trips.
-    initially_known = Probings.fromgrid(side=3, f=true_f, name="known")
+    initially_known = Probings.fromgrid(side=8, f=true_f, name="known")
     plt << initially_known
 
     # Select kernel+params for estimator.
-    # ! I opted for k-fold CV because using 'initially_known_points' for both training and test is prone to overfitting.
-    gpr = GPR.fromoptimizer(initially_known, seed=seed, verbosity=2, max_evals=10)
+    gpr = GPR.fromoptimizer(initially_known, seed=seed, verbosity=2, max_evals=100)
     print(f"Selected kernel/config: {gpr}\n")
 
     # Select point of maximum variance.
     mean_estimator, std_estimator = gpr(initially_known, stdev=True)
-    stds = std_estimator(Probings.fromgrid(side=10))  # create a zeroed grid, and replace zeros by variance (z=std)
+    candidates = Probings.fromgrid(side=10)  # create a zeroed grid, and replace the zeros by variances (z=std)
+    stds = std_estimator(candidates)
     stds.name = "stdev"
-    plt << stds
+    plt(zlim=(0, 2), color="gray") << stds
+    print(f"Maximum stdev: {stds.max} ; min: {stds.min}")
 
-    means = mean_estimator(Probings.fromgrid(side=10))
+    means = mean_estimator(candidates)
     means.name = "mean"
     plt << means
 
