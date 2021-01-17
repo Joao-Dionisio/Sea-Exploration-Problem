@@ -14,7 +14,7 @@ import numpy as np
 
 from seaexp import GPR
 from seaexp.plotter import Plotter
-from seaexp.probings import Probings
+from seaexp.probing import Probing
 from seaexp.seabed import Seabed
 
 seed = 0
@@ -29,11 +29,11 @@ with Plotter(zlim=(0, 100), inplace=True) as plt:
     f7, f8 = gaus(0.63317, 0.34842, s=0.011509, a=80.985), gaus(0.97123, 0.63791, s=0.12154, a=78.089)
     f9, f10 = gaus(0.9706, 0.27782, s=0.10809, a=67.355), gaus(0.40523, 0.28157, s=0.029318, a=32.567)
     true_f = f1 + f2 + f3 + f4 + f5  # + f6 + f7 + f8 + f9 + f10)
-    true_discrete = Probings.fromgrid(side=33, f=true_f, name="true")
+    true_discrete = Probing.fromgrid(side=33, f=true_f, name="true")
     plt << true_discrete
 
     # Known points from past trips.
-    known = Probings.fromgrid(side=3, f=true_f, name="known")
+    known = Probing.fromgrid(side=3, f=true_f, name="known")
     plt << known
 
     # Select kernel+params for estimator.
@@ -46,7 +46,7 @@ with Plotter(zlim=(0, 100), inplace=True) as plt:
     while i < 10:
         # Add point of maximum variance (with simulated z value) to the set of training points (extended_points).
         fmean, fstd = gpr(extended, stdev=True)  # Get estimators fxxx.
-        candidates = Probings.fromgrid(side=20)  # create a zeroed grid, and replace the zeros by variances (z=std)
+        candidates = Probing.fromgrid(side=20)  # create a zeroed grid, and replace the zeros by variances (z=std)
         stds = fstd(candidates)
         stds.name = "stdev"
         plt(zlim=(0, 2), color="gray", delay=0) << stds

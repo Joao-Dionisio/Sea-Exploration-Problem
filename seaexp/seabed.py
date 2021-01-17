@@ -1,11 +1,13 @@
+import numpy as np
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from functools import reduce
 from typing import Union
 
 from seaexp import GPR
 from seaexp.abs.mixin.withPairCheck import withPairCheck
 # if TYPE_CHECKING:
-from seaexp.probings import Probings
+from seaexp.probing import Probing
 
 
 @dataclass
@@ -17,31 +19,28 @@ class Seabed(withPairCheck):
         if not isinstance(self.functions, list):
             self.functions = [self.functions]
 
-    def __call__(self, x, y=None):
+    def __call__(self, xy):
         """
-        True value at the given point, or probings.
+        True value at the point(s) given as a 2d ndarray, or probing.
+
+        Usage:
+            >>> from seaexp import Probing
+            >>> f = Seabed.fromgaussian()
+            >>> f(Probing.fromrandom(3))
 
         Parameters
         ----------
-        x
-            x value or a tuple (x, y)
-        y
-            y value or None
+        xy
+            2d ndarray or probings object
         Returns
         -------
-            True value z.
+            True z value(s).
         """
-        if y is None:
-            if isinstance(x, Probings):
-                return x ^ self
-            elif isinstance(x, tuple):
-                x, y = x
-            else:
-                raise Exception(f"Missing exactly one of: Probings, tuple or x,y float values. Got:", x)
-        value = 0
-        for f in self.functions:
-            value += f(x, y)
-        return value
+        probings = isinstance(xy, Probing) and xy
+        if probings:
+            xy = xy.xy
+        z = reduce(lambda f, g: f(xy) + g(xy), self.functions + [lambda m: 0])
+        return replace(probings, z=z) if probings else z
 
     def __add__(self, other):
         """Create a new seabed by adding another."""
@@ -54,27 +53,42 @@ class Seabed(withPairCheck):
         """
         Callable Gaussian function.
 
+        Usage:
+            >>> f = Seabed.fromgaussian(a=10)
+            >>> xy = Probing.fromgrid(3)
+            >>> xy.show()
+            [[0. 0. 0.]
+             [0. 0. 0.]
+             [0. 0. 0.]]
+            >>> f(xy)
+
         Parameters
         ----------
         s
+            sigma
+        a
+            amplitude
 
         Returns
         -------
 
         """
         center = cls._check_pair(x, y, center)
-        return Seabed(
-            lambda x, y: z + a * math.exp(- ((x - center[0]) / s) ** 2 / 2 - ((y - center[1]) / s) ** 2 / 2)
-        )
+
+        def f(xy):
+            r = ((xy - center) / s) ** 2 / 2
+            return z + a * np.exp(-r[:, 0] - r[:, 1])
+
+        return Seabed(f)
 
     def __sub__(self, other):
         """Compose this Seabed object with a callable object (function, Seabed, Estimator, ...)
 
         Usage:
             >>> real_seabed = Seabed(lambda a, b: a * b)
-            >>> training_set = Probings.fromgrid(side=5, f=real_seabed)
+            >>> training_set = Probing.fromgrid(side=5, f=real_seabed)
             >>> estimated_seabed = GPR("rbf")(training_set)
-            >>> diff = Probings.fromgrid(side=5, f=real_seabed - estimated_seabed)
+            >>> diff = Probing.fromgrid(side=5, f=real_seabed - estimated_seabed)
             >>> diff.show()
             [[ 0.00000176 -0.0000035  -0.00000031  0.00000417 -0.00000212]
              [-0.0000035   0.00000768 -0.00000042 -0.00000753  0.00000373]

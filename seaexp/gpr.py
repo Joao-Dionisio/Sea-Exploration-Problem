@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import TYPE_CHECKING, Tuple, Union
 
-from seaexp.probings import Probings, cv
+from seaexp.probing import Probing
 
 if TYPE_CHECKING:
     from seaexp import Seabed
@@ -17,7 +17,7 @@ from sklearn.gaussian_process.kernels import WhiteKernel, RationalQuadratic, RBF
 from sklearn.utils._testing import ignore_warnings
 
 if TYPE_CHECKING:
-    from seaexp.probings import Probings
+    from seaexp.probing import Probing
 
 import json
 
@@ -95,12 +95,12 @@ class GPR:
         return self.skgpr_func()
 
     @ignore_warnings(category=ConvergenceWarning)
-    def __call__(self, probings, stdev=False):
+    def __call__(self, probing, stdev=False):
         """Return two estimators: one for the mean and other for the stdev
 
         Both estimators shared the same calculations through memoization."""
         skgpr = self.skgpr
-        skgpr.fit(*probings.xy_z)
+        skgpr.fit(*probing.xy_z)
         from seaexp import Seabed
         if stdev:
             return Seabed(lambda x, y: memo(skgpr, x, y)[0]), Seabed(lambda x, y: memo(skgpr, x, y)[1])
@@ -121,19 +121,19 @@ class GPR:
         return estimator
 
     @classmethod
-    def fromoptimizer(cls, known_points: 'Probings', seed=0, k=3, param_space=None, algo=None, max_evals=10,
+    def fromoptimizer(cls, known_points: 'Probing', seed=0, k=3, param_space=None, algo=None, max_evals=10,
                       verbosity=1):
         """
         Hyperopt error minimizer for kernel search
 
         Usage:
-            >>> from seaexp.probings import Probings
+            >>> from seaexp.probing import Probing
             >>> from seaexp.seabed import Seabed
             >>> points = {
             ...     (0.0, 0.1): 0.12,
             ...     (0.2, 0.3): 0.39
             ... }
-            >>> known_points = Probings(points)
+            >>> known_points = Probing(points)
             >>> estimator = GPR.fromoptimizer(known_points, k=2, verbosity=0)
             >>> print(estimator)  # doctest: +NORMALIZE_WHITESPACE
             GPR(kernel:rbf, seed:0, signal:1, params:{'length_scale_bounds': [0.001, 0.1]})

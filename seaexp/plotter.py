@@ -6,7 +6,7 @@ from tkinter import ttk
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 
-from seaexp import Probings
+from seaexp import Probing
 
 
 @dataclass
@@ -15,7 +15,7 @@ class Plotter:
 
     Usage:
         >>> from seaexp import Seabed
-        >>> points = Probings.fromgrid(20)  # zeroed grid
+        >>> points = Probing.fromgrid(20)  # zeroed grid
         >>>
         >>> # Standalone plot: f.
         >>> f = Seabed.fromgaussian(0.2, 0.2, -0.1, s=0.2, a=0.9)
@@ -72,7 +72,7 @@ class Plotter:
 
     def __lshift__(self, other,
                    name=None, xlim=None, ylim=None, zlim=None, inplace=None, block=None, delay=None, color=None):
-        """        Create a new plot from a Probings object. See __init__ doc for details.        """
+        """        Create a new plot from a Probing object. See __init__ doc for details.        """
         if not self.visible or self.quit:
             return
 
