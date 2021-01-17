@@ -55,4 +55,4 @@ setuptools.setup(
     # scripts=['seaexp']
 )
 
-package_dir = {'': 'seaexp'}  # For IDEs like Intellij to recognize the package.
+package_dir = {'': 'seaexp'}  # So IDE (e.g. Intellij) can recognize the working dir when running with ctr+shift+F10.

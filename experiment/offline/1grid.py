@@ -33,7 +33,7 @@ with Plotter(zlim=(0, 100), inplace=True) as plt:
     plt << true_discrete
 
     # Known points from past trips.
-    known = Probings.fromgrid(side=6, f=true_f, name="known")
+    known = Probings.fromgrid(side=3, f=true_f, name="known")
     plt << known
 
     # Select kernel+params for estimator.
@@ -46,7 +46,7 @@ with Plotter(zlim=(0, 100), inplace=True) as plt:
     while i < 10:
         # Add point of maximum variance (with simulated z value) to the set of training points (extended_points).
         fmean, fstd = gpr(extended, stdev=True)  # Get estimators fxxx.
-        candidates = Probings.fromgrid(side=10)  # create a zeroed grid, and replace the zeros by variances (z=std)
+        candidates = Probings.fromgrid(side=20)  # create a zeroed grid, and replace the zeros by variances (z=std)
         stds = fstd(candidates)
         stds.name = "stdev"
         plt(zlim=(0, 2), color="gray", delay=0) << stds
