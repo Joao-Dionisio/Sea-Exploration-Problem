@@ -6,16 +6,17 @@ Grid Maximum-Variance Experiment
 
 Select the point of maximum variance on the grid (G on paper),
 adopt estimated value as a real probing, refit GPR and recalculate variances.
-Proceed until no improvement is made. This results in the surface maximum variance point being added to the trip.
+This results in the grid maximum variance point being added to the trip.
 
 Proceed adding points to the trip until the budget (T on paper) is exhausted.
 """
 import numpy as np
 
-from seaexp import GPR
+from seaexp import GPR, Trip
 from seaexp.plotter import Plotter
 from seaexp.probing import Probing
 from seaexp.seabed import Seabed
+from seaexp.trip import BudgetExhausted
 
 seed = 0
 rnd = np.random.default_rng(seed)
@@ -42,20 +43,41 @@ with Plotter(zlim=(0, 100), inplace=True) as plt:
 
     # Loop
     extended = known
-    i = 0
-    while i < 10:
-        # Add point of maximum variance (with simulated z value) to the set of training points (extended_points).
-        fmean, fstd = gpr(extended, stdev=True)  # Get estimators fxxx.
-        candidates = Probing.fromgrid(20, 20)  # create a zeroed grid, and replace the zeros by variances (z=std)
+    trip = Trip()
+    feasible = True
+    while feasible:
+        # Fit GPR and get both functions from estimator: mean and std.
+        fmean, fstd = gpr(extended, stdev=True)
+
+        # Create a zeroed grid, and replace the zeros by variances (z=stdev).
+        candidates = Probing.fromgrid(20, 20)
         stds = fstd(candidates)
         stds.name = "stdev"
         plt(zlim=(0, 2), color="gray", delay=0) << stds
+
+        # Add newpoint of maximum variance (with simulated z value) to the extended set (training points).
         maxs = stds.argmax
-        newpoint = (rnd.choice(maxs),)
+        newpoint = np.array([rnd.choice(maxs)])
         extended <<= newpoint, fmean(newpoint)
         print(f"Points: {maxs}\n\twith maximum stdev: {stds.max}\t|\t min stdev: {stds.min}\n\tchosen: {newpoint}"
-              f"\n new size: {extended.n}")
-        i += 1
+              f"\n\tnew size: {extended.n}")
+
+        # Try to add newpoint to the trip in three ways: raw, heuristic and exhaustive.
+        attempts = [lambda: trip << newpoint]  #, lambda: trip.shorter, lambda: trip.shortest]
+        feasible = False
+        while attempts and not feasible:
+            try:
+                f = attempts.pop()
+                trip = f()
+                feasible = True
+            except BudgetExhausted as e:
+                print(e)
+                pass
+            # except Exception as e:
+            #     print(e)
+            #     pass
+
+    # Remove newpoint if it is unfeasible or beyond the budget, and end the trip if needed.
 
 """
 
