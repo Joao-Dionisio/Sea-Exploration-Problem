@@ -21,12 +21,15 @@ class Seabed(withPairCheck):
 
     def __call__(self, xy):
         """
-        True value at the point(s) given as a 2d ndarray, or probing.
+        True value at the point(s) given as a 2d ndarray, or as a probing object.
 
         Usage:
             >>> from seaexp import Probing
             >>> f = Seabed.fromgaussian()
-            >>> f(Probing.fromrandom(3))
+            >>> print(f(Probing.fromrandom(3)))
+            [[0.63696169 0.26978671 0.78721606]
+             [0.04097352 0.01652764 0.99902448]
+             [0.81327024 0.91275558 0.47365995]]
 
         Parameters
         ----------
@@ -39,8 +42,10 @@ class Seabed(withPairCheck):
         probings = isinstance(xy, Probing) and xy
         if probings:
             xy = xy.xy
-        z = reduce(lambda f, g: f(xy) + g(xy), self.functions + [lambda m: 0])
-        return replace(probings, z=z) if probings else z
+        z = reduce(lambda m, f: m + f(xy), [0] + self.functions)
+        z.shape = len(z), 1
+        newpoints = np.column_stack([xy, z])
+        return replace(probings, points=newpoints) if probings else z
 
     def __add__(self, other):
         """Create a new seabed by adding another."""
@@ -56,11 +61,20 @@ class Seabed(withPairCheck):
         Usage:
             >>> f = Seabed.fromgaussian(a=10)
             >>> xy = Probing.fromgrid(3)
-            >>> xy.show()
-            [[0. 0. 0.]
-             [0. 0. 0.]
-             [0. 0. 0.]]
-            >>> f(xy)
+            >>> print(xy)
+            [[0.16666667 0.        ]
+             [0.5        0.        ]
+             [0.83333333 0.        ]]
+
+            # >>> xy.show()
+            # [[0. 0. 0.]
+            #  [0. 0. 0.]
+            #  [0. 0. 0.]]
+
+            >>> print(f(xy))
+            [[0.16666667 0.         9.86207117]
+             [0.5        0.         8.82496903]
+             [0.83333333 0.         7.06648278]]
 
         Parameters
         ----------

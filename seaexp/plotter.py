@@ -15,18 +15,18 @@ class Plotter:
 
     Usage:
         >>> from seaexp import Seabed
-        >>> points = Probing.fromgrid(20)  # zeroed grid
+        >>> probing = Probing.fromgrid(20)  # zeroed grid
         >>>
         >>> # Standalone plot: f.
         >>> f = Seabed.fromgaussian(0.2, 0.2, -0.1, s=0.2, a=0.9)
-        >>> Plotter() << f(points)
+        >>> Plotter() << f(probing)
         >>>
         >>> # Context of plots: f+g, f+g+h.
         >>> with Plotter() as plt:
         ...     g = Seabed.fromgaussian(0.8, 0.6, 0, s=0.12, a=0.7)
-        ...     plt << (f + g)(points)
+        ...     plt << (f + g)(probing)
         ...     h = Seabed.fromgaussian(0.5, 0.5, 0, s=0.07, a=0.8)
-        ...     plt << (f + g + h)(points)
+        ...     plt << (f + g + h)(probing)
 
     Parameters
     ----------
@@ -98,7 +98,7 @@ class Plotter:
             ax.collections.remove(self.wframe)  # For animation.
 
         # Plot.
-        self.wframe = ax.plot_trisurf(*other.x_y_z, cmap=color)
+        self.wframe = ax.plot_trisurf(*other.xyz.T, cmap=color)
         if block:
             plt.show(block=True)
         try:

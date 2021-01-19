@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import TYPE_CHECKING, Tuple, Union
 
-from seaexp.probing import Probing
+from seaexp.probing import Probing, cv
 
 if TYPE_CHECKING:
     from seaexp import Seabed
@@ -22,10 +22,13 @@ if TYPE_CHECKING:
 import json
 
 
-@lru_cache
-def memo(skgpr, x, y):
+mem={}
+def memo(skgpr, id, xy):
     """Memoizer to avoid calling predict twice to get both mean and stdev"""
-    return tuple(map(float, skgpr.predict([[x, y]], return_std=True)))
+    key = (skgpr,id)
+    if key not in mem:
+        mem[key] = skgpr.predict(xy, return_std=True)
+    return mem[key]
 
 
 def rf(o, ndigits=2):
@@ -103,9 +106,10 @@ class GPR:
         skgpr.fit(*probing.xy_z)
         from seaexp import Seabed
         if stdev:
-            return Seabed(lambda x, y: memo(skgpr, x, y)[0]), Seabed(lambda x, y: memo(skgpr, x, y)[1])
+            return (Seabed(lambda xy: memo(skgpr, id(xy), xy)[0]),
+                    Seabed(lambda xy: memo(skgpr, id(xy), xy)[1]))
         else:
-            return Seabed(lambda x, y: float(skgpr.predict([(x, y)])))
+            return Seabed(lambda xy: skgpr.predict(xy))
 
     def __add__(self, gpr, restarts=None):
         """Compose two kernels to create a new GPR."""

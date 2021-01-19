@@ -1,23 +1,22 @@
-from dataclasses import dataclass
-from dataclasses import dataclass
-from functools import lru_cache
+from dataclasses import dataclass, replace
+from functools import lru_cache, reduce
+import operator
 from typing import Union
 
 import numpy
 import numpy as np
+# if TYPE_CHECKING:
+from lange import ap
 
 
 # from typing import TYPE_CHECKING
-
-
-# if TYPE_CHECKING:
 
 
 @dataclass
 class Probing:
     """Immutable set of n-D points (n>1) where the dimensions are called xy, xyz, xyza, xyzab... depending on n.
 
-    Usage::
+    Usage:
     >>> # From numpy.
     >>> import numpy as np
     >>> points_np = np.array([
@@ -73,11 +72,38 @@ class Probing:
     ...     print(e)
     Duplicate items in provided list.
 
+    >>> probing.lastcoord
+    'z'
+
     >>> try:
     ...     probing = Probing(((1, 2), (3, 4)))
     ... except Exception as e:
     ...     print(e)
     ('Unknown type of probing points:', <class 'tuple'>)
+
+    >>> # Numpy operations
+    >>> points = {
+    ...     (0.0, 0.1): 1,
+    ...     (0.3, 0.1): 2,
+    ...     (0.3, 0.2): 3,
+    ...     (0.2, 0.3): 4,
+    ...     (0.7, 0.4): 5
+    ... }
+    >>> a = Probing(points)
+    >>> a
+    Probing(points={(0.0, 0.1): 1, (0.3, 0.1): 2, (0.3, 0.2): 3, (0.2, 0.3): 4, (0.7, 0.4): 5}, name=None, eq_threshold=0, checkdups=True)
+
+    >>> b = Probing(dict(reversed(list(points.items()))))
+    >>> b
+    Probing(points={(0.7, 0.4): 5, (0.2, 0.3): 4, (0.3, 0.2): 3, (0.3, 0.1): 2, (0.0, 0.1): 1}, name=None, eq_threshold=0, checkdups=True)
+
+    >>> print(a + b)
+    [[0.  0.1 6. ]
+     [0.3 0.1 6. ]
+     [0.3 0.2 6. ]
+     [0.2 0.3 6. ]
+     [0.7 0.4 6. ]]
+
 
     Parameters
     ----------
@@ -97,27 +123,105 @@ class Probing:
     name: str = None
     eq_threshold: float = 0
     checkdups: bool = True
+    d = None
+    lastcoord = None
     _asarray = None
     _asdict = None  # Data structure to, e.g., speed up pertinence check.
     _scatter = None
+    _memo = {}
+    _min = None
+    _max = None
+
+    def __new__(cls, *args, **kwargs):
+        """
+        >>> true_value = lambda ab: ab[:, 0] * ab[:, 1]
+        >>> a = Probing.fromgrid(2, 2, f=true_value)
+        >>> a
+        Probing(points=array([[0.25  , 0.25  , 0.0625],
+               [0.75  , 0.25  , 0.1875],
+               [0.25  , 0.75  , 0.1875],
+               [0.75  , 0.75  , 0.5625]]), name=None, eq_threshold=0, checkdups=True)
+
+        >>> b = Probing.fromgrid(2, 1, f=true_value)
+        >>> b
+        Probing(points=array([[0.25 , 0.5  , 0.125],
+               [0.75 , 0.5  , 0.375]]), name=None, eq_threshold=0, checkdups=True)
+
+        >>> print(a & b)
+        [[0.25   0.25   0.0625]
+         [0.75   0.25   0.1875]
+         [0.25   0.75   0.1875]
+         [0.75   0.75   0.5625]
+         [0.25   0.5    0.125 ]
+         [0.75   0.5    0.375 ]]
+
+        """
+        # Numpy ops.  # TODO: complete lists
+        unary_target = {"abs": 0, "sum": 0}
+        binary_target = {"divmod": 0, "add": 0, "mul": "multiply", "sub": "subtract"}
+        binary_all = {"and": "vstack"}
+        for magicm, npm in (unary_target | binary_target | binary_all).items():
+            def f(name):
+                h = getattr(np, name)
+                if magicm in unary_target:
+                    def g(self):
+                        if name not in self._memo:
+                            newpys = np.column_stack([self.input, h(self.target).reshape(self.n, 1)])
+                            self._memo[name] = replace(self, points=newpys)
+                        return self._memo[(name)]
+                elif magicm in binary_target:
+                    def g(self, other):
+                        if (name, other) not in self._memo:
+                            lst = [self.input, h(self.target, other.target).reshape(self.n, 1)]
+                            newpts = np.column_stack(lst)
+                            self._memo[(name, other)] = replace(self, points=newpts)
+                        return self._memo[(name, other)]
+                else:
+                    def g(self, other):
+                        if (name, other) not in self._memo:
+                            self._memo[(name, other)] = replace(self, points=h([self.asarray, other.asarray]))
+                        return self._memo[(name, other)]
+                return g
+
+            setattr(cls, f"__{magicm}__", f(npm or magicm))
+        instance = object.__new__(cls)
+        return instance
 
     def __post_init__(self):
         self.n = len(self.points)
         if isinstance(self.points, np.ndarray):
+            if len(self.points.shape) < 2 or self.points.shape[1] < 2:
+                raise Exception(f"Invalid shape: {self.points.shape}.")
             self.d = self.points.shape[1] if self.n > 0 else None
             self._asarray = self.points
             if self.checkdups and self.n != len(self.asdict):
                 raise Exception("Duplicate items in provided array.")
         elif isinstance(self.points, dict):
-            self.d = len(next(iter(self.points))) + 1 if self.n > 0 else None
-            self._asdict = self.points
+            if self.n > 0:
+                fstkey = next(iter(self.points))
+                if isinstance(fstkey, int):
+                    self._asdict = {(k,): v for k, v in self.points.items()}
+                    fstkey = [None]
+                else:
+                    self._asdict = self.points
+                self.d = len(fstkey) + 1
         elif isinstance(self.points, list):
+            # TODO: check invalid key
             self.d = len(self.points[0]) if self.n > 0 else None
             self._asarray = np.array(self.points)
             if self.checkdups and self.n != len(self.asdict):
-                raise Exception("Duplicate items in provided list.")
+                raise Exception(f"Duplicate items in provided list.")
         else:
             raise Exception("Unknown type of probing points:", type(self.points))
+        if self.d is not None:
+            self.lastcoord = self.num2coord(self.d - 1)
+
+    @staticmethod
+    def num2coord(i):
+        asc = i + 120
+        if asc > 122:
+            asc -= 26
+        return chr(asc)
 
     @property
     def asarray(self):
@@ -161,6 +265,16 @@ class Probing:
         if self._asdict is None:
             self._asdict = (self.d or {}) and {tuple(row[:self.d - 1]): float(row[self.d - 1]) for row in self.asarray}
         return self._asdict
+
+    @property
+    @lru_cache
+    def sum(self):
+        return np.sum(self.target)
+
+    @property
+    @lru_cache
+    def abs(self):
+        return Probing(np.column_stack([self.input, np.abs(self.target).reshape(self.n, 1)]))
 
     @lru_cache
     def __getattr__(self, item: str):
@@ -287,7 +401,7 @@ class Probing:
         Probing object extended by the given set of points.
         """
         if isinstance(other, tuple):
-            other = [other]
+            other = np.hstack((other[0], other[1]))
 
         # Safe append.
         if self.checkdups:
@@ -300,7 +414,7 @@ class Probing:
                     raise Exception(msg)
                 newdict[k] = v
             if len(newdict) - self.n != len(other):
-                raise Exception("Duplicate items in provided array.")
+                raise Exception("Duplicate items in provided array:", other)
             return Probing(newdict)
 
         # Unsafe append.
@@ -319,363 +433,402 @@ class Probing:
     def __hash__(self):  # doctest: +SKIP
         return id(self)
 
+    # @property
+    # def scatter(self):
+    #     """Convert to a spatially correct 2D numpy ndarray.
+    #
+    #     Usage::
+    #     >>> points = {
+    #     ...     (0.0, 0.1): 0.9,
+    #     ...     (0.3, 0.1): 0.0,
+    #     ...     (0.3, 0.2): 0.2,
+    #     ...     (0.7, 0.4): 0.1,
+    #     ...     (0.2, 0.3): 0.3
+    #     ... }
+    #
+    #     >>> probing = Probing(points)
+    #     >>> probing.scatter
+    #     array([[0.9, nan, nan, nan],
+    #            [nan, nan, nan, nan],
+    #            [nan, nan, 0.3, nan],
+    #            [0. , 0.2, nan, nan],
+    #            [nan, nan, nan, nan],
+    #            [nan, nan, nan, nan],
+    #            [nan, nan, nan, nan],
+    #            [nan, nan, nan, 0.1]])
+    #
+    #     Unknown points will be filled with NaN."""
+    #     # TODO: generalize to any number of dimensions
+    #     if self._scatter is None:
+    #         axes = []
+    #         for c in range(self.d - 1):
+    #             xs = self.asarray[:, c]
+    #             setx = set(xs)
+    #             minx = min(setx)
+    #             maxx = max(setx)
+    #             ordw = sorted(list(setx))
+    #             difw = set(abs(numpy.array(ordw[1:] + ordw[0:1]) - numpy.array(ordw)))
+
+    # np.diff
+
+    #             minw = min(difw)
+    #             n = int((maxx - minx) / minw)
+    #             marks = list(xs) + [x * minw + minx for x in range(n) if all([abs(x * minw + minx - x0) > self.eq_threshold for x0 in xs])]
+    #             difw2 = set(abs(numpy.array(marks[1:] + marks[0:1]) - numpy.array(marks)))
+    #             minw = min(difw2)
+    #             if minw <= self.eq_threshold:
+    #                 minw = sorted(difw2)[1]
+    #             n = int((maxx - minx) / minw)
+    #             marks = list(xs) + [x * minw + minx for x in range(n) if all([abs(x * minw + minx - x0) > self.eq_threshold for x0 in xs])]
+    #             axes.append(sorted(marks))
+    #         meshgrid = np.meshgrid(*axes)
+    #
+    #         def f(*key):
+    #             return self.asdict[key] if tuple(key) in self.asdict else numpy.nan
+    #
+    #         fvec = np.vectorize(f)
+    #         self._scatter = fvec(*meshgrid)
+    #     return self._scatter
+
+    @classmethod
+    def fromgrid(cls, *sides, f=0, name=None):
+        """A new Probing object containing 'n-1'-D grid points with values of 'n' coordinate given by function 'f'.
+
+        Leave a margin of '1 / (2 * side)' around extreme points.
+
+        2D usage:
+            >>> probing = Probing.fromgrid(3, 3)
+            >>> print(probing)  # As sequence of zero-valued points.
+            [[0.16666667 0.16666667 0.        ]
+             [0.5        0.16666667 0.        ]
+             [0.83333333 0.16666667 0.        ]
+             [0.16666667 0.5        0.        ]
+             [0.5        0.5        0.        ]
+             [0.83333333 0.5        0.        ]
+             [0.16666667 0.83333333 0.        ]
+             [0.5        0.83333333 0.        ]
+             [0.83333333 0.83333333 0.        ]]
+
+            >>> probing = Probing.fromgrid(3, 3, f=lambda xy: xy[:, 0] * xy[:, 1])
+            >>> print(probing)  # As sequence of points.
+            [[0.16666667 0.16666667 0.02777778]
+             [0.5        0.16666667 0.08333333]
+             [0.83333333 0.16666667 0.13888889]
+             [0.16666667 0.5        0.08333333]
+             [0.5        0.5        0.25      ]
+             [0.83333333 0.5        0.41666667]
+             [0.16666667 0.83333333 0.13888889]
+             [0.5        0.83333333 0.41666667]
+             [0.83333333 0.83333333 0.69444444]]
+
+            # >>> probing.show()  # As scatter matrix.
+            # [[0.02777778 0.08333333 0.13888889]
+            #  [0.08333333 0.25       0.41666667]
+            #  [0.13888889 0.41666667 0.69444444]]
+
+        Parameters
+        ----------
+        sides
+            iterable with the dimensions the the grid, or an integer for a 2D sidesXsides grid
+        f
+            Function providing values for the last coordinate.
+        rnd
+            Seed.
+        name
+            Identifier, e.g., for plots.
+
+        """
+        axes = [ap[1 / (2 * side), 3 / (2 * side), ..., 1] for side in sides]  # margin = 1 / (2 * side)
+        input = np.column_stack([d.ravel() for d in np.meshgrid(*axes)])  # xs,ys
+        f_ = (lambda m: np.zeros(len(m))) if isinstance(f, int) else f
+        array = np.column_stack([input, f_(input)])  # xs,ys,zs
+        return Probing(array)
+
+    @classmethod
+    def fromrandom(cls, size, f=0, dims=2, rnd=0, name=None):  # simulated=None,
+        """A new Probing object containing 'n-1'-D random points with values of 'n' coordinate given by function 'f'.
+
+        2D usage:
+            >>> probing = Probing.fromrandom(2)
+            >>> print(probing)  # As sequence of zero-valued points.
+            [[0.63696169 0.26978671 0.        ]
+             [0.04097352 0.01652764 0.        ]]
+
+            >>> probing = Probing.fromrandom(2, f=lambda xy: xy[:, 0] * xy[:, 1])
+            >>> print(probing)  # As sequence of points.
+            [[0.63696169 0.26978671 0.1718438 ]
+             [0.04097352 0.01652764 0.0006772 ]]
+
+            # >>> probing.show()  # As scatter matrix.
+            # [[0.0006772       nan]
+            #  [      nan 0.1718438]]
+
+        Parameters
+        ----------
+        size
+            Number of points.
+        dims
+            Dimension of the space
+        f
+            Function providing values for the last coordinate.
+        rnd
+            Seed.
+        name
+            Identifier, e.g., for plots.
+        """
+        if isinstance(rnd, int):
+            rnd = numpy.random.default_rng(rnd)
+        input = rnd.random((size, dims))
+        f_ = (lambda m: np.zeros(len(m))) if isinstance(f, int) else f
+        array = np.column_stack([input, f_(input)])  # xs,ys,zs
+        return Probing(array)
+
+    def __iter__(self):
+        yield from self.asarray
+
     @property
-    def scatter(self):
-        """Convert to a spatially correct 2D numpy ndarray.
+    @lru_cache
+    def target(self):
+        return getattr(self, self.lastcoord).reshape(self.n)
 
-        Usage::
-        >>> points = {
-        ...     (0.0, 0.1): 0.9,
-        ...     (0.3, 0.1): 0.0,
-        ...     (0.3, 0.2): 0.2,
-        ...     (0.7, 0.4): 0.1,
-        ...     (0.2, 0.3): 0.3
-        ... }
+    @property
+    @lru_cache
+    def input(self):
+        return getattr(self, self.allcoords[:-1])
 
-        >>> probing = Probing(points)
-        >>> probing.scatter
-        array([[0.9, nan, nan, nan],
-               [nan, nan, nan, nan],
-               [nan, nan, 0.3, nan],
-               [0. , 0.2, nan, nan],
-               [nan, nan, nan, nan],
-               [nan, nan, nan, nan],
-               [nan, nan, nan, nan],
-               [nan, nan, nan, 0.1]])
+    @property
+    @lru_cache
+    def allcoords(self):
+        return "".join(map(self.num2coord, range(self.d)))
 
-        Unknown points will be filled with NaN."""
-        # TODO: generalize to any number of dimensions
-        if self._scatter is None:
-            xs, ys = self.asarray[:, 0], self.asarray[:, 1]
-            setx, sety = set(xs), set(ys)
-            minx, miny = min(setx), min(sety)
-            maxx, maxy = max(setx), max(sety)
-            ordw, ordh = sorted(list(setx)), sorted(list(sety))
-            difw = abs(numpy.array(ordw[1:] + ordw[0:1]) - numpy.array(ordw))
-            difh = abs(numpy.array(ordh[1:] + ordh[0:1]) - numpy.array(ordh))
-            minw, minh = min(difw), min(difh)
-            w, h = int((maxx - minx) / minw) + 1, int((maxy - miny) / minh) + 1
-            arr = numpy.empty((w, h))
-            arr.fill(numpy.nan)
-            for x, y, z in self.asarray:
-                arr[int((x - minx) / minw), int((y - miny) / minh)] = z
-            self._scatter = arr
-        return self._scatter
+    @property
+    @lru_cache
+    def xy_z(self):
+        return self.xy, self.z
 
-#
-#     @classmethod
-#     def fromgrid(cls, side=4, f=lambda *_: 0.0, name=None):  # , simulated=None):
-#         """A new Probings object containing 'side'x'side' 2D points with z values given by function 'f'.
-#
-#         Leave a margin of '1 / (2 * side)' around extreme points.
-#
-#         Usage::
-#             >>> probings = Probings.fromgrid(f=lambda x, y: x * y)
-#             >>> probings.show()
-#             [[0.015625 0.046875 0.078125 0.109375]
-#              [0.046875 0.140625 0.234375 0.328125]
-#              [0.078125 0.234375 0.390625 0.546875]
-#              [0.109375 0.328125 0.546875 0.765625]]
-#         """
-#         # if simulated is not None:
-#         #     raise NotImplementedError("'simulated' flag still not ready.")
-#         # true_value = not simulated        TODO
-#         points = {}
-#         margin = 1 / (2 * side)
-#         for x in ap[margin, 3 * margin, ..., 1]:
-#             for y in ap[margin, 3 * margin, ..., 1]:
-#                 points[x, y] = f(x, y)  # , true_value
-#         return Probings(points, name=name)
-#
-#     @classmethod
-#     def fromrandom(cls, size=16, f=lambda *_: 0.0, rnd=None, name=None):  # simulated=None,
-#         """A new Probings object containing 'size' 2D points with z values given by function 'f'."""
-#         # if simulated is not None:
-#         #     raise NotImplementedError("'simulated' flag still not ready.")
-#         # true_value = not simulated  TODO
-#         if rnd is None:
-#             rnd = numpy.random.default_rng(0)
-#         if isinstance(rnd, int):
-#             rnd = numpy.random.default_rng(rnd)
-#         points = {}
-#         for i in range(size):
-#             x = rnd.random()
-#             y = rnd.random()
-#             points[x, y] = f(x, y)  # , true_value
-#         return Probings(points, name=name)
-#
-#
-#     # def items(self):
-#     #     return self.points.items()
-#
-#     @cached_property
-#     def xy(self):
-#         """2D points as ndarray
-#
-#         Usage:
-#             >>> from seaexp import Probings
-#             >>> Probings.fromrandom(3).xy
-#             array([[0.63696169, 0.26978671],
-#                    [0.04097352, 0.01652764],
-#                    [0.81327024, 0.91275558]])
-#         """
-#         return numpy.array(list(self.points.keys()))
-#
-#     @cached_property
-#     def z(self):
-#         return list(self.points.values())
-#
-#     @cached_property
-#     def xy_z(self):
-#         return [numpy.array(pair) for pair in self.xy], self.z
-#
-#     @cached_property
-#     def x_y_z(self):
-#         return tuple(zip(*self.xy)) + (self.z,)
-#
-#     @cached_property
-#     def xyz(self):
-#         return [(x, y, z) for (x, y), z in self]
-#
-#     def __iter__(self):
-#         yield from self.points.items()
-#
-#     def __sub__(self, other):
-#         """Element-wise subtraction of a Probings object from another
-#
-#         The points need to match. Otherwise, see Seabed.__sub__.
-#
-#         Usage:
-#             >>> from seaexp.gpr import GPR
-#             >>> true_value = lambda a, b: a * b
-#             >>> real = Probings.fromgrid(side=5, f=true_value)
-#             >>> estimator = GPR("rbf")(real)
-#             >>> estimated = Probings.fromgrid(side=5, f=estimator)
-#             >>> (real - estimated).show()
-#             [[ 0.00000176 -0.0000035  -0.00000031  0.00000417 -0.00000212]
-#              [-0.0000035   0.00000768 -0.00000042 -0.00000753  0.00000373]
-#              [-0.00000031 -0.00000042 -0.00000024  0.00000049  0.00000059]
-#              [ 0.00000417 -0.00000753  0.00000049  0.00000764 -0.00000488]
-#              [-0.00000212  0.00000373  0.00000059 -0.00000488  0.00000272]]
-#         """
-#         newpoints = {k: self[k] - other[k] for k in self.points}
-#         return Probings(newpoints)
-#
-#     # def __divmod__(self, other):
-#     def __abs__(self):
-#         """
-#         Usage:
-#             >>> probings = Probings.fromgrid(f=lambda x, y: -x * y)
-#             >>> print(probings)
-#             [[-0.015625 -0.046875 -0.078125 -0.109375]
-#              [-0.046875 -0.140625 -0.234375 -0.328125]
-#              [-0.078125 -0.234375 -0.390625 -0.546875]
-#              [-0.109375 -0.328125 -0.546875 -0.765625]]
-#             >>> print(abs(probings))
-#             [[0.015625 0.046875 0.078125 0.109375]
-#              [0.046875 0.140625 0.234375 0.328125]
-#              [0.078125 0.234375 0.390625 0.546875]
-#              [0.109375 0.328125 0.546875 0.765625]]
-#
-#         Returns
-#         -------
-#
-#         """
-#         # # Only use np if it is already calculated.
-#         # if self._np is None:
-#         newpoints = {k: abs(v) for k, v in self.points.items()}
-#         return Probings(newpoints)
-#         # newnp = abs(self.np)
-#         # newprobings = Probings.fromnp(newnp)
-#         # newprobings._np = newnp  # Do not waste the calculation of np, caching just in case someone call it.
-#         # return newprobings
-#
-#     @classmethod
-#     def fromnp(cls, np: numpy.ndarray):
-#         """Create a Probings object from a 2D numpy array
-#
-#         Usage:
-#             >>> array = numpy.array([[0.4, 0.3, 0.3],[0, 0, 0.5],[0.2, 0.3, 0.8]])
-#             >>> array
-#             array([[0.4, 0.3, 0.3],
-#                    [0. , 0. , 0.5],
-#                    [0.2, 0.3, 0.8]])
-#             >>> fromnp = Probings.fromnp(array)
-#             >>> fromnp
-#             Probings(points={(0, 0): 0.4, (1, 0): 0, (2, 0): 0.2, (0, 1): 0.3, (1, 1): 0, (2, 1): 0.3, (0, 2): 0.3, (1, 2): 0.5, (2, 2): 0.8}, name=None)
-#             >>> (fromnp.np == array).all()
-#             True
-#
-#         """
-#         m = np.copy()
-#         m[m == 0] = 8124567890123456  # Save zeros.
-#         m = csr_matrix(m).todok()  # Convert to sparse.
-#         points = {k: 0 if v == 8124567890123456 else v for k, v in dict(m).items()}  # Recover zeros.
-#         return Probings(points)
-#
-#     @cached_property
-#     def sum(self):
-#         return sum(self.z)
-#
-#     @cached_property
-#     def abs(self):
-#         return abs(self)
-#
-#     def __getitem__(self, item):
-#         if isinstance(item, slice):
-#             return Probings(dict(list(self)[item]))
-#         return self.points[item]
-#
-#     def __call__(self, x, y):
-#         return self[(x, y)]
-#
-#     # noinspection PyUnresolvedReferences
-#     def __xor__(self, f):
-#         """Replace z values according to the given function
-#
-#         Usage:
-#             >>> zeroed = Probings.fromgrid(side=5)
-#             >>> print(zeroed)
-#             [[0. 0. 0. 0. 0.]
-#              [0. 0. 0. 0. 0.]
-#              [0. 0. 0. 0. 0.]
-#              [0. 0. 0. 0. 0.]
-#              [0. 0. 0. 0. 0.]]
-#             >>> (zeroed ^ (lambda x, y: x * y)).show()
-#             [[0.01 0.03 0.05 0.07 0.09]
-#              [0.03 0.09 0.15 0.21 0.27]
-#              [0.05 0.15 0.25 0.35 0.45]
-#              [0.07 0.21 0.35 0.49 0.63]
-#              [0.09 0.27 0.45 0.63 0.81]]
-#         """
-#         return Probings({(x, y): f(x, y) for x, y in self.points})
-#
-#     @property
-#     def n(self):
-#         return len(self.points)
-#
-#     def show(self):
-#         """Print z values as a rounded float matrix"""
-#         with numpy.printoptions(suppress=True, linewidth=1000, precision=8):
-#             print(self)
-#
-#     def shuffled(self, rnd=numpy.random.default_rng(0)):
-#         tuples = list(self.points.items())
-#         shuffle(tuples, rnd.random)
-#         return Probings(dict(tuples))
-#
-#     def __and__(self, other):
-#         """Concatenation of two Probings
-#
-#         The right operand will override the left operand in case of key collision.
-#         Usage:
-#             >>> true_value = lambda a, b: a * b
-#             >>> a = Probings.fromgrid(side=3, f=true_value)
-#             >>> b = Probings.fromgrid(side=2, f=true_value)
-#             >>> a.show()
-#             [[0.02777778 0.08333333 0.13888889]
-#              [0.08333333 0.25       0.41666667]
-#              [0.13888889 0.41666667 0.69444444]]
-#             >>> b.show()
-#             [[0.0625 0.1875]
-#              [0.1875 0.5625]]
-#             >>> (a & b).show()  # Note that the output granularity is adjusted to the minimum possible.
-#             [[0.02777778        nan        nan        nan 0.08333333        nan        nan        nan 0.13888889]
-#              [       nan 0.0625            nan        nan        nan        nan        nan 0.1875            nan]
-#              [       nan        nan        nan        nan        nan        nan        nan        nan        nan]
-#              [       nan        nan        nan        nan        nan        nan        nan        nan        nan]
-#              [0.08333333        nan        nan        nan 0.25              nan        nan        nan 0.41666667]
-#              [       nan        nan        nan        nan        nan        nan        nan        nan        nan]
-#              [       nan        nan        nan        nan        nan        nan        nan        nan        nan]
-#              [       nan 0.1875            nan        nan        nan        nan        nan 0.5625            nan]
-#              [0.13888889        nan        nan        nan 0.41666667        nan        nan        nan 0.69444444]]
-#         """
-#
-#         return Probings(self.points | other.points)
-#
-#     def plot(self, xlim=(0, 1), ylim=(0, 1), zlim=(0, 1), name=None, block=True):
-#         """
-#
-#         Usage:
-#             >>> from seaexp import Seabed
-#             >>> f = Seabed.fromgaussian()
-#             >>> g = Seabed.fromgaussian()
-#             >>> probings = Probings.fromrandom(20, f  + g)
-#             >>> probings.plot()
-#
-#         Returns
-#         -------
-#
-#         """
-#         from seaexp.plotter import Plotter
-#         plt = Plotter(xlim, ylim, zlim, name, inplace=False, block=block)
-#         name_ = self.name
-#         self.name = None
-#         plt << self
-#         self.name = name_
-#         self.plots.append(plt)  # Keeps a reference, so plt destruction (and  window creation) is delayed.
-#
-#     @cached_property
-#     def max(self):
-#         """Return maximum z."""
-#         return max(self.z)
-#
-#     @cached_property
-#     def argmax(self):
-#         """Return list of x,y points with maximum z."""
-#         return [(x, y) for z, (x, y) in zip(self.z, self.xy) if abs(z - self.max) <= self.eq_threshold]
-#
-#     @cached_property
-#     def min(self):
-#         return min(self.z)
-#
-#
-# def cv(probings, k=5, rnd=None):
-#     """
-#     Usage:
-#         >>> probings = Probings({(0, 0): 0, (1, 1): 0, (2, 2): 0, (3, 3): 0, (4, 4): 0, (5, 5): 0})
-#         >>> probings.xy
-#         [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)]
-#         >>> for run, (training, test) in enumerate(cv(probings, k=3)):
-#         ...     print(f"Run {run}:")
-#         ...     print("training:", training.xy)
-#         ...     print("test:", test.xy)
-#         Run 0:
-#         training: [(5, 5), (0, 0), (1, 1), (3, 3)]
-#         test: [(2, 2), (4, 4)]
-#         Run 1:
-#         training: [(2, 2), (4, 4), (1, 1), (3, 3)]
-#         test: [(5, 5), (0, 0)]
-#         Run 2:
-#         training: [(2, 2), (4, 4), (5, 5), (0, 0)]
-#         test: [(1, 1), (3, 3)]
-#
-#     Parameters
-#     ----------
-#     probings
-#     k
-#     rnd
-#
-#     Returns
-#     -------
-#
-#     """
-#     if probings.n < k:
-#         raise Exception(f"Number of points ({probings.n}) is smaller than k ({k}).")
-#     if rnd is None:
-#         rnd = numpy.random.default_rng(0)
-#     min_fold_size, rem = divmod(probings.n, k)
-#     shuffled = probings.shuffled(rnd)
-#     folds = []
-#     i = 0
-#     while i < probings.n:
-#         fold_size = min_fold_size
-#         if i < rem:
-#             fold_size += 1
-#         folds.append(shuffled[i:i + fold_size])
-#         i += fold_size
-#
-#     for i in range(k):
-#         tr = reduce(operator.and_, folds[0:(i + k) % k] + folds[i + 1: k])
-#         ts = folds[i]
-#         yield tr, ts
+    #     @classmethod
+    #     def fromnp(cls, np: numpy.ndarray):
+    #         """Create a Probings object from a 2D numpy array
+    #
+    #         Usage:
+    #             >>> array = numpy.array([[0.4, 0.3, 0.3],[0, 0, 0.5],[0.2, 0.3, 0.8]])
+    #             >>> array
+    #             array([[0.4, 0.3, 0.3],
+    #                    [0. , 0. , 0.5],
+    #                    [0.2, 0.3, 0.8]])
+    #             >>> fromnp = Probings.fromnp(array)
+    #             >>> fromnp
+    #             Probings(points={(0, 0): 0.4, (1, 0): 0, (2, 0): 0.2, (0, 1): 0.3, (1, 1): 0, (2, 1): 0.3, (0, 2): 0.3, (1, 2): 0.5, (2, 2): 0.8}, name=None)
+    #             >>> (fromnp.np == array).all()
+    #             True
+    #
+    #         """
+    #         m = np.copy()
+    #         m[m == 0] = 8124567890123456  # Save zeros.
+    #         m = csr_matrix(m).todok()  # Convert to sparse.
+    #         points = {k: 0 if v == 8124567890123456 else v for k, v in dict(m).items()}  # Recover zeros.
+    #         return Probings(points)
+    #
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            return Probing(self.asarray[item])
+        elif isinstance(item, int):
+            return self.asarray[item]
+        return self.asdict[item]
+
+    def __setitem__(self, key, value):
+        if isinstance(key, int):
+            raise Exception("Not implemented yet.")
+        return self << (key + (value,))
+
+    #
+    #     def __call__(self, x, y):
+    #         return self[(x, y)]
+    #
+    #     # noinspection PyUnresolvedReferences
+    #     def __xor__(self, f):
+    #         """Replace z values according to the given function
+    #
+    #         Usage:
+    #             >>> zeroed = Probings.fromgrid(side=5)
+    #             >>> print(zeroed)
+    #             [[0. 0. 0. 0. 0.]
+    #              [0. 0. 0. 0. 0.]
+    #              [0. 0. 0. 0. 0.]
+    #              [0. 0. 0. 0. 0.]
+    #              [0. 0. 0. 0. 0.]]
+    #             >>> (zeroed ^ (lambda x, y: x * y)).show()
+    #             [[0.01 0.03 0.05 0.07 0.09]
+    #              [0.03 0.09 0.15 0.21 0.27]
+    #              [0.05 0.15 0.25 0.35 0.45]
+    #              [0.07 0.21 0.35 0.49 0.63]
+    #              [0.09 0.27 0.45 0.63 0.81]]
+    #         """
+    #         return Probings({(x, y): f(x, y) for x, y in self.points})
+    #
+    #     @property
+    #     def n(self):
+    #         return len(self.points)
+    #
+    # def show(self):
+    #     """Print rounded z values as a scatter matrix"""
+    #     with numpy.printoptions(suppress=True, linewidth=1000, precision=8):
+    #         print(self.scatter)
+    #
+    def shuffled(self, rnd=numpy.random.default_rng(0)):
+        """
+        Usage:
+        >>> probing = Probing.fromrandom(4)
+        >>> print(probing)
+        [[0.63696169 0.26978671 0.        ]
+         [0.04097352 0.01652764 0.        ]
+         [0.81327024 0.91275558 0.        ]
+         [0.60663578 0.72949656 0.        ]]
+
+        >>> print(probing.shuffled())
+        [[0.81327024 0.91275558 0.        ]
+         [0.63696169 0.26978671 0.        ]
+         [0.04097352 0.01652764 0.        ]
+         [0.60663578 0.72949656 0.        ]]
+
+        Parameters
+        ----------
+        rnd
+
+        Returns
+        -------
+
+        """
+        arr = self.asarray.copy()
+        rnd.shuffle(arr)
+        return Probing(arr)
+
+    #
+    #
+    def plot(self, xlim=(0, 1), ylim=(0, 1), zlim=(0, 1), name=None, block=True):
+        """
+
+        Usage:
+            >>> from seaexp import Seabed
+            >>> f = Seabed.fromgaussian()
+            >>> g = Seabed.fromgaussian()
+            >>> probings = Probing.fromrandom(20, f=f + g)
+            >>> probings.plot()
+
+        Returns
+        -------
+
+        """
+        from seaexp.plotter import Plotter
+        plt = Plotter(self.name, xlim, ylim, zlim, inplace=False, block=block)
+        name_ = self.name
+        self.name = None
+        plt << self
+        self.name = name_
+        # self.plots.append(plt)  # Keeps a reference, so plt destruction (and  window creation) is delayed.
+
+    def __len__(self):
+        return self.n
+
+    @property
+    def max(self):
+        """Return maximum target value."""
+        if self._max is None:
+            self._max = np.max(self.target)
+        return self._max
+
+    @property
+    def min(self):
+        """Return minimum target value."""
+        if self._min is None:
+            self._min = np.min(self.target)
+        return self._min
+
+    @property
+    @lru_cache  # TODO: check if caching/Noning is worth the cost
+    def argmax(self):
+        """Return list of points with maximum target value."""
+        dif = self.max - self.target
+        mask = dif <= self.eq_threshold
+        return self.input[np.where(mask)]
+
+
+def cv(probings, k=5, rnd=None):
+    """
+    Usage:
+    >>> probings = Probing({(0, 0): 0, (1, 1): 0, (2, 2): 0, (3, 3): 0, (4, 4): 0, (5, 5): 0})
+    >>> probings.xy
+    array([[0, 0],
+           [1, 1],
+           [2, 2],
+           [3, 3],
+           [4, 4],
+           [5, 5]])
+
+    >>> for run, (training, test) in enumerate(cv(probings, k=3)):
+    ...     print(f"Run {run}:")
+    ...     print("training:\\n", training.xy)
+    ...     print("test:\\n", test.xy)
+    ...     print("---")
+    Run 0:
+    training:
+     [[5 5]
+     [4 4]
+     [0 0]
+     [1 1]]
+    test:
+     [[3 3]
+     [2 2]]
+    ---
+    Run 1:
+    training:
+     [[3 3]
+     [2 2]
+     [0 0]
+     [1 1]]
+    test:
+     [[5 5]
+     [4 4]]
+    ---
+    Run 2:
+    training:
+     [[3 3]
+     [2 2]
+     [5 5]
+     [4 4]]
+    test:
+     [[0 0]
+     [1 1]]
+    ---
+
+    Parameters
+    ----------
+    probings
+    k
+    rnd
+
+    Returns
+    -------
+
+    """
+    if probings.n < k:
+        raise Exception(f"Number of points ({probings.n}) is smaller than k ({k}).")
+    if rnd is None:
+        rnd = numpy.random.default_rng(0)
+    min_fold_size, rem = divmod(probings.n, k)
+    arrshuffled = probings.asarray.copy()
+    rnd.shuffle(arrshuffled)
+    folds = []
+
+    i = 0
+    while i < probings.n:
+        fold_size = min_fold_size
+        if i < rem:
+            fold_size += 1
+        folds.append(arrshuffled[i:i + fold_size])
+        i += fold_size
+
+    for i in range(k):
+        tr = reduce(lambda a, b: np.vstack([a, b]), folds[0:(i + k) % k] + folds[i + 1: k])
+        ts = folds[i]
+        yield Probing(tr, checkdups=False), Probing(ts, checkdups=False)
