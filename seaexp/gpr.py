@@ -21,11 +21,12 @@ if TYPE_CHECKING:
 
 import json
 
+mem = {}
 
-mem={}
+
 def memo(skgpr, id, xy):
     """Memoizer to avoid calling predict twice to get both mean and stdev"""
-    key = (skgpr,id)
+    key = skgpr, id
     if key not in mem:
         mem[key] = skgpr.predict(xy, return_std=True)
     return mem[key]

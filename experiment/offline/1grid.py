@@ -33,7 +33,7 @@ with Plotter(zlim=(0, 100), inplace=True) as plt:
     plt << true_discrete
 
     # Known points from past trips.
-    known = Probing.fromgrid(33, 3, f=true_f, name="known")
+    known = Probing.fromgrid(3, 3, f=true_f, name="known")
     plt << known
 
     # Select kernel+params for estimator.
@@ -51,7 +51,7 @@ with Plotter(zlim=(0, 100), inplace=True) as plt:
         stds.name = "stdev"
         plt(zlim=(0, 2), color="gray", delay=0) << stds
         maxs = stds.argmax
-        newpoint = tuple(rnd.choice(maxs))
+        newpoint = (rnd.choice(maxs),)
         extended <<= newpoint, fmean(newpoint)
         print(f"Points: {maxs}\n\twith maximum stdev: {stds.max}\t|\t min stdev: {stds.min}\n\tchosen: {newpoint}"
               f"\n new size: {extended.n}")
