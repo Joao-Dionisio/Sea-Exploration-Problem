@@ -20,11 +20,10 @@ approach:
 
 Copyright (c) by Joao Pedro PEDROSO and Mikio KUBO, 2012
 """
-import math
 import time
-from numpy.random import shuffle, uniform, seed
 import networkx
 from gurobipy import *
+import numpy as np
 
 
 def current_milli_time():
@@ -108,17 +107,17 @@ def distance(x1, y1, x2, y2):
     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
 
-def make_data(n):
-    """make_data: compute matrix distance based on euclidean distance"""
-    V = range(1, n + 1)
-    x = dict([(i, uniform()) for i in V])
-    y = dict([(i, uniform()) for i in V])
-    c = {}
-    for i in V:
-        for j in V:
-            if j > i:
-                c[i, j] = distance(x[i], y[i], x[j], y[j])
-    return V, c
+# def make_data(n):
+#     """make_data: compute matrix distance based on euclidean distance"""
+#     V = range(1, n + 1)
+#     x = dict([(i, uniform()) for i in V])
+#     y = dict([(i, uniform()) for i in V])
+#     c = {}
+#     for i in V:
+#         for j in V:
+#             if j > i:
+#                 c[i, j] = distance(x[i], y[i], x[j], y[j])
+#     return V, c
 
 
 def sequence(V, edges):
@@ -215,10 +214,10 @@ def length(tour, D):
     return z
 
 
-def randtour(n):
+def randtour(n, rnd):
     """Construct a random tour of size 'n'."""
     sol = list(range(n))  # set solution equal to [0,1,...,n-1]
-    shuffle(sol)  # place it in a random order
+    rnd.shuffle(sol)  # place it in a random order
     return sol
 
 
@@ -314,7 +313,7 @@ def improve(tour, z, D, C):
             dist_bd = D[b, d]
             delta = (dist_ac + dist_bd) - (dist_ab + dist_cd)
             if delta < 0:  # exchange decreases length
-                exchange(tour, tinv, i, j);
+                exchange(tour, tinv, i, j)
                 z += delta
                 improved = True
                 break
@@ -331,7 +330,7 @@ def improve(tour, z, D, C):
             dist_ac = D[a, c]
             delta = (dist_ac + dist_bd) - (dist_ab + dist_cd)
             if delta < 0:  # exchange decreases length
-                exchange(tour, tinv, i, j);
+                exchange(tour, tinv, i, j)
                 z += delta
                 break
     return z
@@ -357,7 +356,7 @@ def localsearch(tour, z, D, C=None):
     return z
 
 
-def multistart_localsearch(k, n, D, cutoff=0, report=None):
+def multistart_localsearch(k, n, D, cutoff=0, report=None , rnd=None) -> tuple[list, float]:
     """Do k iterations of local search, starting from random solutions.
 
     Parameters:
@@ -367,11 +366,13 @@ def multistart_localsearch(k, n, D, cutoff=0, report=None):
 
     Returns best solution and its cost.
     """
+    if rnd is None:
+        rnd = np.random.default_rng(0)
     C = mk_closest(D, n)  # create a sorted list of distances to each node
     bestt = None
     bestz = None
     for i in range(0, k):
-        tour = randtour(n)
+        tour = randtour(n, rnd)
         z = length(tour, D)
         if z < cutoff:
             return tour, z
@@ -385,77 +386,3 @@ def multistart_localsearch(k, n, D, cutoff=0, report=None):
                 report(z, tour)
 
     return bestt, bestz
-
-
-if __name__ == "__main__":
-    """Local search for the Travelling Saleman Problem: sample usage."""
-
-    #
-    # test the functions:
-    #
-
-    # seed(1)	# uncomment for having always the same behavior
-    import sys
-
-    if len(sys.argv) == 1:
-        # create a graph with several cities' coordinates
-        coord = [(4, 0), (5, 6), (8, 3), (4, 4), (4, 1), (4, 10), (4, 7), (6, 8), (8, 1)]
-        n, D = mk_matrix(coord, distL2)  # create the distance matrix
-        instance = "toy problem"
-    else:
-        instance = sys.argv[1]
-        n, coord, D = read_tsplib(instance)  # create the distance matrix
-        # n, coord, D = read_tsplib('INSTANCES/TSP/eil51.tsp')  # create the distance matrix
-
-    # function for printing best found solution when it is found
-    from time import clock
-
-    init = clock()
-
-
-    def report_sol(obj, s=""):
-        print
-        "cpu:%g\tobj:%g\ttour:%s" % \
-        (clock(), obj, s)
-
-
-    print
-    "*** travelling salesman problem ***"
-    print
-
-    # random construction
-    print
-    "random construction + local search:"
-    tour = randtour(n)  # create a random tour
-    z = length(tour, D)  # calculate its length
-    print
-    "random:", tour, z, '  -->  ',
-    z = localsearch(tour, z, D)  # local search starting from the random tour
-    print
-    tour, z
-    print
-
-    # greedy construction
-    print
-    "greedy construction with nearest neighbor + local search:"
-    for i in range(n):
-        tour = nearest_neighbor(n, i, D)  # create a greedy tour, visiting city 'i' first
-        z = length(tour, D)
-        print
-        "nneigh:", tour, z, '  -->  ',
-        z = localsearch(tour, z, D)
-        print
-        tour, z
-    print
-
-    # multi-start local search
-    print
-    "random start local search:"
-    niter = 100
-    tour, z = multistart_localsearch(niter, n, D, report_sol)
-    assert z == length(tour, D)
-    print
-    "best found solution (%d iterations): z = %g" % (niter, z)
-    print
-    tour
-    print

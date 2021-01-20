@@ -29,12 +29,7 @@ class Probing:
     ... ])
     >>> probing = Probing(points_np, checkdups=False)
     >>> print(probing)
-    [[0.  0.1 0.9]
-     [0.3 0.1 0. ]
-     [0.3 0.2 0.2]
-     [0.2 0.3 0.8]
-     [0.7 0.4 0.1]
-     [0.2 0.3 0.5]]
+    (0.0 0.1 0.9) (0.3 0.1 0.0) (0.3 0.2 0.2) (0.2 0.3 0.8) (0.7 0.4 0.1) (0.2 0.3 0.5)
 
     >>> # To avoid inconsistency, duplicates are checked by default at the cost of calling asdict() internally.
     >>> try:
@@ -98,12 +93,7 @@ class Probing:
     Probing(points={(0.7, 0.4): 5, (0.2, 0.3): 4, (0.3, 0.2): 3, (0.3, 0.1): 2, (0.0, 0.1): 1}, name=None, eq_threshold=0, checkdups=True)
 
     >>> print(a + b)
-    [[0.  0.1 6. ]
-     [0.3 0.1 6. ]
-     [0.3 0.2 6. ]
-     [0.2 0.3 6. ]
-     [0.7 0.4 6. ]]
-
+    (0.0 0.1 6.0) (0.3 0.1 6.0) (0.3 0.2 6.0) (0.2 0.3 6.0) (0.7 0.4 6.0)
 
     Parameters
     ----------
@@ -148,12 +138,7 @@ class Probing:
                [0.75 , 0.5  , 0.375]]), name=None, eq_threshold=0, checkdups=True)
 
         >>> print(a & b)
-        [[0.25   0.25   0.0625]
-         [0.75   0.25   0.1875]
-         [0.25   0.75   0.1875]
-         [0.75   0.75   0.5625]
-         [0.25   0.5    0.125 ]
-         [0.75   0.5    0.375 ]]
+        (0.25 0.25 0.0625) (0.75 0.25 0.1875) (0.25 0.75 0.1875) (0.75 0.75 0.5625) (0.25 0.5 0.125) (0.75 0.5 0.375)
 
         """
         # Numpy ops.  # TODO: complete lists
@@ -354,25 +339,16 @@ class Probing:
         ... ])
         >>> probing = Probing(points)
         >>> print(probing)
-        [[0.  0.1 0.9]
-         [0.3 0.1 0. ]
-         [0.3 0.2 0.2]
-         [0.7 0.4 0.1]
-         [0.2 0.3 0.5]]
+        (0.0 0.1 0.9) (0.3 0.1 0.0) (0.3 0.2 0.2) (0.7 0.4 0.1) (0.2 0.3 0.5)
 
         >>> print(probing << (3, 3, 3))
-        [[0.  0.1 0.9]
-         [0.3 0.1 0. ]
-         [0.3 0.2 0.2]
-         [0.7 0.4 0.1]
-         [0.2 0.3 0.5]
-         [3.  3.  3. ]]
+        (0.0 0.1 0.9) (0.3 0.1 0.0) (0.3 0.2 0.2) (0.7 0.4 0.1) (0.2 0.3 0.5) (3.0 3.0 3.0)
 
         >>> # Insertion of an already existent item raises an exception.
         >>> try:
         ...     probing <<= 3, 3, 3
         ...     probing <<= 3, 3, 3
-        ... except Exception as e:
+        ... except DuplicateKey as e:
         ...     print(e)
         Attempt to override old '(3, 3)' value '3' with '3' while appending a new point.
 
@@ -382,26 +358,20 @@ class Probing:
         ...     print(probing << np.array([[2, 2, 2], [2, 2, 2]]))
         ... except Exception as e:
         ...     print(e)
-        Duplicate items in provided array.
-
+        ('Duplicate items in provided array:', array([[2, 2, 2],
+               [2, 2, 2]]))
 
         >>> # Unsafe insertion of duplicate items is ignored by checkdups=False.
         >>> probing = Probing(points, checkdups=False)
         >>> print(probing << np.array([[2, 2, 2], [2, 2, 2]]))
-        [[0.  0.1 0.9]
-         [0.3 0.1 0. ]
-         [0.3 0.2 0.2]
-         [0.7 0.4 0.1]
-         [0.2 0.3 0.5]
-         [2.  2.  2. ]
-         [2.  2.  2. ]]
+        (0.0 0.1 0.9) (0.3 0.1 0.0) (0.3 0.2 0.2) (0.7 0.4 0.1) (0.2 0.3 0.5) (2.0 2.0 2.0) (2.0 2.0 2.0)
 
         Returns
         -------
         Probing object extended by the given set of points.
         """
         if isinstance(other, tuple):
-            other = np.hstack((other[0], other[1]))
+            other = np.hstack((other[0], other[1])) if len(other) == 2 else np.array([other])
 
         # Safe append.
         if self.checkdups:
@@ -411,7 +381,7 @@ class Probing:
                 if k in self.asdict:
                     val = self.asdict[k]
                     msg = f"Attempt to override old '{k}' value '{v}' with '{val}' while appending a new point."
-                    raise Exception(msg)
+                    raise DuplicateKey(msg)
                 newdict[k] = v
             if len(newdict) - self.n != len(other):
                 raise Exception("Duplicate items in provided array:", other)
@@ -422,13 +392,13 @@ class Probing:
         newarray = np.vstack([self.asarray, other])
         return Probing(newarray, checkdups=False)
 
+    @lru_cache
     def __str__(self):
         """
-        >>> print(str(Probing([[1,2,3],[4,5,6]])))
-        [[1 2 3]
-         [4 5 6]]
+        >>> str(Probing([[1,2,3],[4,5,6]]))
+        '(1 2 3) (4 5 6)'
         """
-        return str(self.asarray)
+        return " ".join(["(" + " ".join([str(round(x, 5)) for x in row]) + ")" for row in self.asarray])
 
     def __hash__(self):  # doctest: +SKIP
         return id(self)
@@ -497,34 +467,14 @@ class Probing:
         Leave a margin of '1 / (2 * side)' around extreme points.
 
         2D usage:
-            >>> probing = Probing.fromgrid(3, 3)
-            >>> print(probing)  # As sequence of zero-valued points.
-            [[0.16666667 0.16666667 0.        ]
-             [0.5        0.16666667 0.        ]
-             [0.83333333 0.16666667 0.        ]
-             [0.16666667 0.5        0.        ]
-             [0.5        0.5        0.        ]
-             [0.83333333 0.5        0.        ]
-             [0.16666667 0.83333333 0.        ]
-             [0.5        0.83333333 0.        ]
-             [0.83333333 0.83333333 0.        ]]
+        >>> probing = Probing.fromgrid(3, 3)
+        >>> print(probing)  # As sequence of zero-valued points.
+        (0.16667 0.16667 0.0) (0.5 0.16667 0.0) (0.83333 0.16667 0.0) (0.16667 0.5 0.0) (0.5 0.5 0.0) (0.83333 0.5 0.0) (0.16667 0.83333 0.0) (0.5 0.83333 0.0) (0.83333 0.83333 0.0)
 
-            >>> probing = Probing.fromgrid(3, 3, f=lambda xy: xy[:, 0] * xy[:, 1])
-            >>> print(probing)  # As sequence of points.
-            [[0.16666667 0.16666667 0.02777778]
-             [0.5        0.16666667 0.08333333]
-             [0.83333333 0.16666667 0.13888889]
-             [0.16666667 0.5        0.08333333]
-             [0.5        0.5        0.25      ]
-             [0.83333333 0.5        0.41666667]
-             [0.16666667 0.83333333 0.13888889]
-             [0.5        0.83333333 0.41666667]
-             [0.83333333 0.83333333 0.69444444]]
 
-            # >>> probing.show()  # As scatter matrix.
-            # [[0.02777778 0.08333333 0.13888889]
-            #  [0.08333333 0.25       0.41666667]
-            #  [0.13888889 0.41666667 0.69444444]]
+        >>> probing = Probing.fromgrid(3, 3, f=lambda xy: xy[:, 0] * xy[:, 1])
+        >>> print(probing)  # As sequence of points.
+        (0.16667 0.16667 0.02778) (0.5 0.16667 0.08333) (0.83333 0.16667 0.13889) (0.16667 0.5 0.08333) (0.5 0.5 0.25) (0.83333 0.5 0.41667) (0.16667 0.83333 0.13889) (0.5 0.83333 0.41667) (0.83333 0.83333 0.69444)
 
         Parameters
         ----------
@@ -551,13 +501,11 @@ class Probing:
         2D usage:
             >>> probing = Probing.fromrandom(2)
             >>> print(probing)  # As sequence of zero-valued points.
-            [[0.63696169 0.26978671 0.        ]
-             [0.04097352 0.01652764 0.        ]]
+            (0.63696 0.26979 0.0) (0.04097 0.01653 0.0)
 
             >>> probing = Probing.fromrandom(2, f=lambda xy: xy[:, 0] * xy[:, 1])
             >>> print(probing)  # As sequence of points.
-            [[0.63696169 0.26978671 0.1718438 ]
-             [0.04097352 0.01652764 0.0006772 ]]
+            (0.63696 0.26979 0.17184) (0.04097 0.01653 0.00068)
 
             # >>> probing.show()  # As scatter matrix.
             # [[0.0006772       nan]
@@ -680,16 +628,10 @@ class Probing:
         Usage:
         >>> probing = Probing.fromrandom(4)
         >>> print(probing)
-        [[0.63696169 0.26978671 0.        ]
-         [0.04097352 0.01652764 0.        ]
-         [0.81327024 0.91275558 0.        ]
-         [0.60663578 0.72949656 0.        ]]
+        (0.63696 0.26979 0.0) (0.04097 0.01653 0.0) (0.81327 0.91276 0.0) (0.60664 0.7295 0.0)
 
         >>> print(probing.shuffled())
-        [[0.81327024 0.91275558 0.        ]
-         [0.63696169 0.26978671 0.        ]
-         [0.04097352 0.01652764 0.        ]
-         [0.60663578 0.72949656 0.        ]]
+        (0.81327 0.91276 0.0) (0.63696 0.26979 0.0) (0.04097 0.01653 0.0) (0.60664 0.7295 0.0)
 
         Parameters
         ----------
@@ -731,14 +673,14 @@ class Probing:
         return self.n
 
     @property
-    def max(self):
+    def max(self) -> float:
         """Return maximum target value."""
         if self._max is None:
             self._max = np.max(self.target)
         return self._max
 
     @property
-    def min(self):
+    def min(self) -> float:
         """Return minimum target value."""
         if self._min is None:
             self._min = np.min(self.target)
@@ -746,7 +688,7 @@ class Probing:
 
     @property
     @lru_cache  # TODO: check if caching/Noning is worth the cost
-    def argmax(self):
+    def argmax(self) -> np.ndarray:
         """Return list of points with maximum target value."""
         dif = self.max - self.target
         mask = dif <= self.eq_threshold
@@ -832,3 +774,7 @@ def cv(probings, k=5, rnd=None):
         tr = reduce(lambda a, b: np.vstack([a, b]), folds[0:(i + k) % k] + folds[i + 1: k])
         ts = folds[i]
         yield Probing(tr, checkdups=False), Probing(ts, checkdups=False)
+
+
+class DuplicateKey(Exception):
+    """Avoid repeating points"""

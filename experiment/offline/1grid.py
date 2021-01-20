@@ -42,12 +42,12 @@ with Plotter(zlim=(0, 100), inplace=True) as plt:
     print(f"Selected kernel/config: {gpr}\n")
 
     # Loop
-    extended = known
+    current = known
     trip = Trip()
     feasible = True
     while feasible:
         # Fit GPR and get both functions from estimator: mean and std.
-        fmean, fstd = gpr(extended, stdev=True)
+        fmean, fstd = gpr(current, stdev=True)
 
         # Create a zeroed grid, and replace the zeros by variances (z=stdev).
         candidates = Probing.fromgrid(20, 20)
@@ -58,26 +58,28 @@ with Plotter(zlim=(0, 100), inplace=True) as plt:
         # Add newpoint of maximum variance (with simulated z value) to the extended set (training points).
         maxs = stds.argmax
         newpoint = np.array([rnd.choice(maxs)])
-        extended <<= newpoint, fmean(newpoint)
-        print(f"Points: {maxs}\n\twith maximum stdev: {stds.max}\t|\t min stdev: {stds.min}\n\tchosen: {newpoint}"
-              f"\n\tnew size: {extended.n}")
+        extended = current << (newpoint, fmean(newpoint))
+        print(f"Maxpoints {maxs}\n\tmaxstd: {stds.max}\tminstd: {stds.min}\tchosen: {newpoint}\tnew size: {extended.n}")
 
-        # Try to add newpoint to the trip in three ways: raw, heuristic and exhaustive.
-        attempts = [lambda: trip << newpoint]  #, lambda: trip.shorter, lambda: trip.shortest]
+        # Try to add newpoint to the trip in three ways: raw, heuristic #and exhaustive.
+        bkp = trip  # Save state before insertion attempt.
         feasible = False
-        while attempts and not feasible:
-            try:
-                f = attempts.pop()
-                trip = f()
-                feasible = True
-            except BudgetExhausted as e:
-                print(e)
-                pass
+        try:
+            trip <<= newpoint
+            feasible = True
+            print(f"Successful insertion:\n\tsize: {trip.n}\tcost: {trip.cost}\ttrip:{trip}")
+        except BudgetExhausted as e:
+            print(e)
+            # try:
             # except Exception as e:
             #     print(e)
-            #     pass
+            # Confirm or revert insertion according to feasibility.
+        if feasible:
+            current = extended
+        else:
+            trip = bkp
 
-    # Remove newpoint if it is unfeasible or beyond the budget, and end the trip if needed.
+    # trip.plot()
 
 """
 
