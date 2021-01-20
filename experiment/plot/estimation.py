@@ -20,11 +20,11 @@ with Plotter(zlim=(0, 100)) as plt:
     f7, f8 = gaus(0.63317, 0.34842, s=0.011509, a=80.985), gaus(0.97123, 0.63791, s=0.12154, a=78.089)
     f9, f10 = gaus(0.9706, 0.27782, s=0.10809, a=67.355), gaus(0.40523, 0.28157, s=0.029318, a=32.567)
     true_f = f1 + f2 + f3 + f4 + f5  # + f6 + f7 + f8 + f9 + f10)
-    true_discrete = Probing.fromgrid(side=33, f=true_f, name="true")
+    true_discrete = Probing.fromgrid(33, 33, f=true_f, name="true")
     plt << true_discrete
 
     # Known points from past trips.
-    initially_known = Probing.fromgrid(side=6, f=true_f, name="known")
+    initially_known = Probing.fromgrid(6, 6, f=true_f, name="known")
     plt << initially_known
 
     # Select kernel+params for estimator.
@@ -33,7 +33,7 @@ with Plotter(zlim=(0, 100)) as plt:
 
     # Select point of maximum variance.
     mean_estimator, std_estimator = gpr(initially_known, stdev=True)
-    candidates = Probing.fromgrid(side=10)  # create a zeroed grid, and replace the zeros by variances (z=std)
+    candidates = Probing.fromgrid(10, 10)  # create a zeroed grid, and replace the zeros by variances (z=std)
     stds = std_estimator(candidates)
     stds.name = "stdev"
     plt(zlim=(0, 2), color="gray") << stds

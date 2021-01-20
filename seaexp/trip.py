@@ -182,7 +182,7 @@ class Trip:
         """
         return " ".join(["(" + " ".join([str(round(x, 5)) for x in row]) + ")" for row in self.points])
 
-    def show(self):  # doctest: +SKIP
+    def show(self):  # -pragma: no cover
         print(str(self))
 
     def plot(self, xlim=(0, 1), ylim=(0, 1), zlim=(0, 1), name=None, block=True):
@@ -190,11 +190,9 @@ class Trip:
         Plot trip as n-D connected points
 
         Usage:
-            >>> trip = Trip.fromrandom(6)
-
-            >>> trip.plot()  # doctest: +SKIP
-
-            >>> trip.shorter().plot()  # doctest: +SKIP
+        >>> trip = Trip.fromrandom(6)
+        >>> trip.plot()  # _doctest: +SKIP
+        >>> trip.shorter().plot()  # _doctest: +SKIP
 
         Returns
         -------

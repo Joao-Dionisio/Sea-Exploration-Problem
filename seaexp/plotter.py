@@ -15,7 +15,7 @@ class Plotter:
 
     Usage:
         >>> from seaexp import Seabed
-        >>> probing = Probing.fromgrid(20)  # zeroed grid
+        >>> probing = Probing.fromgrid(20, 20)  # zeroed grid
         >>>
         >>> # Standalone plot: f.
         >>> f = Seabed.fromgaussian(0.2, 0.2, -0.1, s=0.2, a=0.9)

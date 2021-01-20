@@ -400,7 +400,7 @@ class Probing:
         """
         return " ".join(["(" + " ".join([str(round(x, 5)) for x in row]) + ")" for row in self.asarray])
 
-    def __hash__(self):  # doctest: +SKIP
+    def __hash__(self):  # -pragma: no cover
         return id(self)
 
     # @property
@@ -655,7 +655,7 @@ class Probing:
             >>> f = Seabed.fromgaussian()
             >>> g = Seabed.fromgaussian()
             >>> probings = Probing.fromrandom(20, f=f + g)
-            >>> probings.plot()
+            >>> probings.plot()  # _doctest: +SKIP
 
         Returns
         -------
