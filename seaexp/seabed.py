@@ -27,9 +27,7 @@ class Seabed(withPairCheck):
             >>> from seaexp import Probing
             >>> f = Seabed.fromgaussian()
             >>> print(f(Probing.fromrandom(3)))
-            [[0.63696169 0.26978671 0.78721606]
-             [0.04097352 0.01652764 0.99902448]
-             [0.81327024 0.91275558 0.47365995]]
+            (0.63696 0.26979 0.78722) (0.04097 0.01653 0.99902) (0.81327 0.91276 0.47366)
 
         Parameters
         ----------
@@ -43,9 +41,8 @@ class Seabed(withPairCheck):
         if probings:
             xy = xy.xy
         z = reduce(lambda m, f: m + f(xy), [0] + self.functions)
-        z.shape = len(z), 1
         newpoints = np.column_stack([xy, z])
-        return replace(probings, points=newpoints) if probings else z
+        return replace(probings, points=newpoints) if probings else z.reshape(len(z))
 
     def __add__(self, other):
         """Create a new seabed by adding another."""
@@ -60,11 +57,9 @@ class Seabed(withPairCheck):
 
         Usage:
             >>> f = Seabed.fromgaussian(a=10)
-            >>> xy = Probing.fromgrid(3)
+            >>> xy = Probing.fromgrid(3, 3)
             >>> print(xy)
-            [[0.16666667 0.        ]
-             [0.5        0.        ]
-             [0.83333333 0.        ]]
+            (0.16667 0.16667 0.0) (0.5 0.16667 0.0) (0.83333 0.16667 0.0) (0.16667 0.5 0.0) (0.5 0.5 0.0) (0.83333 0.5 0.0) (0.16667 0.83333 0.0) (0.5 0.83333 0.0) (0.83333 0.83333 0.0)
 
             # >>> xy.show()
             # [[0. 0. 0.]
@@ -72,9 +67,7 @@ class Seabed(withPairCheck):
             #  [0. 0. 0.]]
 
             >>> print(f(xy))
-            [[0.16666667 0.         9.86207117]
-             [0.5        0.         8.82496903]
-             [0.83333333 0.         7.06648278]]
+            (0.16667 0.16667 9.72604) (0.5 0.16667 8.70325) (0.83333 0.16667 6.96902) (0.16667 0.5 8.70325) (0.5 0.5 7.78801) (0.83333 0.5 6.23615) (0.16667 0.83333 6.96902) (0.5 0.83333 6.23615) (0.83333 0.83333 4.99352)
 
         Parameters
         ----------
@@ -99,23 +92,20 @@ class Seabed(withPairCheck):
         """Compose this Seabed object with a callable object (function, Seabed, Estimator, ...)
 
         Usage:
-            >>> real_seabed = Seabed(lambda a, b: a * b)
-            >>> training_set = Probing.fromgrid(side=5, f=real_seabed)
+            >>> real_seabed = Seabed(lambda ab: ab[:, 0] * ab[:, 1])
+            >>> training_set = Probing.fromgrid(5, 5, f=real_seabed)
             >>> estimated_seabed = GPR("rbf")(training_set)
-            >>> diff = Probing.fromgrid(side=5, f=real_seabed - estimated_seabed)
+            >>> diff = Probing.fromgrid(5, 5, f=real_seabed - estimated_seabed)
             >>> diff.show()
-            [[ 0.00000176 -0.0000035  -0.00000031  0.00000417 -0.00000212]
-             [-0.0000035   0.00000768 -0.00000042 -0.00000753  0.00000373]
-             [-0.00000031 -0.00000042 -0.00000024  0.00000049  0.00000059]
-             [ 0.00000417 -0.00000753  0.00000049  0.00000764 -0.00000488]
-             [-0.00000212  0.00000373  0.00000059 -0.00000488  0.00000272]]
+            (0.1 0.1 0.0) (0.3 0.1 -0.0) (0.5 0.1 -0.0) (0.7 0.1 0.0) (0.9 0.1 -0.0) (0.1 0.3 -0.0) (0.3 0.3 1e-05) (0.5 0.3 -0.0) (0.7 0.3 -1e-05) (0.9 0.3 0.0) (0.1 0.5 -0.0) (0.3 0.5 -0.0) (0.5 0.5 -0.0) (0.7 0.5 0.0) (0.9 0.5 0.0) (0.1 0.7 0.0) (0.3 0.7 -1e-05) (0.5 0.7 0.0) (0.7 0.7 1e-05) (0.9 0.7 -0.0) (0.1 0.9 -0.0) (0.3 0.9 0.0) (0.5 0.9 0.0) (0.7 0.9 -0.0) (0.9 0.9 0.0)
+
             >>> error = diff.abs.sum
-            >>> error
-            7.551744725834558e-05
+            >>> round(error, 5)
+            8e-05
             """
         if not isinstance(other, Seabed):
             other = Seabed(other)
         return self + -other
 
     def __neg__(self):
-        return Seabed(lambda x, y: -self(x, y))
+        return Seabed(lambda ab: -self(ab))

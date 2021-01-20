@@ -254,7 +254,7 @@ class Probing:
     @property
     @lru_cache
     def sum(self):
-        return np.sum(self.target)
+        return float(np.sum(self.target))
 
     @property
     @lru_cache
@@ -400,6 +400,9 @@ class Probing:
         """
         return " ".join(["(" + " ".join([str(round(x, 5)) for x in row]) + ")" for row in self.asarray])
 
+    def show(self):  # -pragma: no cover
+        print(str(self))
+
     def __hash__(self):  # -pragma: no cover
         return id(self)
 
@@ -472,7 +475,7 @@ class Probing:
         (0.16667 0.16667 0.0) (0.5 0.16667 0.0) (0.83333 0.16667 0.0) (0.16667 0.5 0.0) (0.5 0.5 0.0) (0.83333 0.5 0.0) (0.16667 0.83333 0.0) (0.5 0.83333 0.0) (0.83333 0.83333 0.0)
 
 
-        >>> probing = Probing.fromgrid(3, 3, f=lambda xy: xy[:, 0] * xy[:, 1])
+        >>> probing = Probing.fromgrid(3, 3, f=lambda xy: (xy[:, 0] * xy[:, 1]).reshape(len(xy)))
         >>> print(probing)  # As sequence of points.
         (0.16667 0.16667 0.02778) (0.5 0.16667 0.08333) (0.83333 0.16667 0.13889) (0.16667 0.5 0.08333) (0.5 0.5 0.25) (0.83333 0.5 0.41667) (0.16667 0.83333 0.13889) (0.5 0.83333 0.41667) (0.83333 0.83333 0.69444)
 
@@ -503,7 +506,7 @@ class Probing:
             >>> print(probing)  # As sequence of zero-valued points.
             (0.63696 0.26979 0.0) (0.04097 0.01653 0.0)
 
-            >>> probing = Probing.fromrandom(2, f=lambda xy: xy[:, 0] * xy[:, 1])
+            >>> probing = Probing.fromrandom(2, f=lambda xy: (xy[:, 0] * xy[:, 1]).reshape(len(xy)))
             >>> print(probing)  # As sequence of points.
             (0.63696 0.26979 0.17184) (0.04097 0.01653 0.00068)
 
