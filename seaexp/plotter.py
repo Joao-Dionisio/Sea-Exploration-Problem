@@ -72,9 +72,11 @@ class Plotter:
 
     def __lshift__(self, other,
                    name=None, xlim=None, ylim=None, zlim=None, inplace=None, block=None, delay=None, color=None):
-        """        Create a new plot from a Probing object. See __init__ doc for details.        """
+        """        Create a new plot from a Probing [¿or Trip?] object. See __init__ doc for details.        """
         if not self.visible or self.quit:
             return
+
+        # if isinstance(other, Probing):
 
         #  Reconfigure, if the Plotter object is used as callable.
         name = \

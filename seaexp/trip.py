@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 from dataclasses import dataclass, replace, field
 from functools import lru_cache
 from typing import Union
@@ -30,11 +31,12 @@ class Trip:
     cost_per_probing: float = 1
 
     def __post_init__(self):
+        self.d = len(self.depot)
         if len(self.offshore) > 0:
             if not isinstance(self.offshore[0], np.ndarray):
                 self.offshore = np.array(self.offshore)
         else:
-            self.offshore = np.empty((0, len(self.depot)))
+            self.offshore = np.empty((0, self.d))
         if not isinstance(self.depot, np.ndarray):
             self.depot = np.array(self.depot)
         self.points = np.vstack([self.depot, self.offshore, self.depot])
@@ -182,6 +184,63 @@ class Trip:
 
     def show(self):  # doctest: +SKIP
         print(str(self))
+
+    def plot(self, xlim=(0, 1), ylim=(0, 1), zlim=(0, 1), name=None, block=True):
+        """
+        Plot trip as n-D connected points
+
+        Usage:
+            >>> trip = Trip.fromrandom(6)
+
+            >>> trip.plot()  # doctest: +SKIP
+
+            >>> trip.shorter().plot()  # doctest: +SKIP
+
+        Returns
+        -------
+
+        """
+        # TODO: move this to Plotter class<<
+        if 1 <= self.d <= 2:
+            plt.plot(*zip(*self.points), 'xb-')
+            plt.show()
+        elif self.d == 3:
+            fig = plt.figure()
+            ax = fig.gca(projection='3d')
+            theta = np.linspace(-4 * np.pi, 4 * np.pi, 100)
+            z = np.linspace(-2, 2, 100)
+            r = z ** 2 + 1
+            x = r * np.sin(theta)
+            y = r * np.cos(theta)
+            ax.plot(*zip(*self.points), label='parametric curve')
+            ax.legend()
+            plt.show()
+        else:
+            raise Exception(f"Cannot handle {self.d} dimensions.")
+
+    @classmethod
+    def fromrandom(cls, size, dims=2, rnd=0, name=None):
+        """A new Trip object containing 'n'-D random points.
+
+        2D usage:
+        >>> trip = Trip.fromrandom(4)
+        >>> print(trip)  # Random walk across points.
+        (0.0 0.0) (0.63696 0.26979) (0.04097 0.01653) (0.81327 0.91276) (0.60664 0.7295) (0.0 0.0)
+
+        Parameters
+        ----------
+        size
+            Number of points.
+        dims
+            Dimension of the space
+        rnd
+            Seed.
+        name
+            Identifier, e.g., for plots.
+        """
+        if isinstance(rnd, int):
+            rnd = np.random.default_rng(rnd)
+        return Trip(rnd.random((size, dims)), depot=np.zeros(dims))
 
 
 class BudgetExhausted(Exception):

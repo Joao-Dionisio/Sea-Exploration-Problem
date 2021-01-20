@@ -495,7 +495,7 @@ class Probing:
         return Probing(array)
 
     @classmethod
-    def fromrandom(cls, size, f=0, dims=2, rnd=0, name=None):  # simulated=None,
+    def fromrandom(cls, size, f=0, dims=2, rnd=0, name=None):
         """A new Probing object containing 'n-1'-D random points with values of 'n' coordinate given by function 'f'.
 
         2D usage:
@@ -667,7 +667,7 @@ class Probing:
         self.name = None
         plt << self
         self.name = name_
-        # self.plots.append(plt)  # Keeps a reference, so plt destruction (and  window creation) is delayed.
+    #     TODO: não está usando arg name??
 
     def __len__(self):
         return self.n
