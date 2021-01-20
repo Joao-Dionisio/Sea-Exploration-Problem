@@ -202,7 +202,11 @@ class Trip:
         """
         # TODO: move this to Plotter class<<
         if 1 <= self.d <= 2:
-            plt.plot(*zip(*self.points), 'xb-')
+            # plt.ion()
+            # fig = plt.figure()
+            pl, = plt.plot(*zip(*self.points), 'xb-')
+            # fig.canvas.flush_events()  # update the plot and take care of window events (like resizing etc.)
+            # pl.remove()
             plt.show()
         elif self.d == 3:
             fig = plt.figure()

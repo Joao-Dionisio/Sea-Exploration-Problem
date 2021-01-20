@@ -56,6 +56,7 @@ class Plotter:
     visible: bool = True
     wframe = None
     root = None
+    fig = None
     plots = 0
     quit = False
 
